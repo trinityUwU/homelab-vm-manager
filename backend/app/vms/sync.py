@@ -9,19 +9,26 @@ from ..motd.apply import apply_motd, read_motd
 from ..motd.render import render
 from ..netdata.streaming import enable_streaming, is_streaming
 from .models import VM, now_iso
-from .network import ENI_PATH, render_interfaces, _restart_networking, _write_resolv_conf
+from .network import (
+    ENI_PATH,
+    detect_interface,
+    render_interfaces,
+    _restart_networking,
+    _write_resolv_conf,
+)
 from .repository import save_vm
 
 
 def _check_ip(session: SSHSession, vm: VM) -> dict:
-    code, out, _err = session.run("ip -4 addr show ens18 | grep -oP 'inet \\K[0-9.]+'")
+    iface = detect_interface(session)
+    code, out, _err = session.run(f"ip -4 addr show {iface} | grep -oP 'inet \\K[0-9.]+'")
     current = out.strip()
     if code == 0 and current == vm.static_ip:
         return {"point": "IP statique", "status": "ok", "detail": f"{vm.static_ip} déjà correcte"}
-    config = render_interfaces(vm.static_ip)
+    config = render_interfaces(vm.static_ip, iface)
     session.run(f"cat > {ENI_PATH} <<'EOF'\n{config}EOF", sudo=True)
     _write_resolv_conf(session, vm.static_ip)
-    _restart_networking(session)
+    _restart_networking(session, iface)
     return {"point": "IP statique", "status": "corrigé", "detail": f"reconfigurée vers {vm.static_ip}"}
 
 
