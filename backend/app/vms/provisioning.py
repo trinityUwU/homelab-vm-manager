@@ -17,6 +17,7 @@ from ..netdata.streaming import (
     ensure_prerequisites,
     install_netdata,
     read_machine_guid,
+    set_display_hostname,
 )
 from .models import VM
 from .network import apply_static_ip, wait_for_host
@@ -56,6 +57,10 @@ def _install_monitoring(job: Job, session: SSHSession, vm: VM, settings: dict) -
     ensure_prerequisites(session)
     job.emit("step", "Installation de Netdata (kickstart.sh)…", 0.60, "netdata_install")
     install_netdata(session)
+    code, real_host, _err = session.run("hostname")
+    display = f"{real_host.strip()} ( HomeLab : {vm.name} )"
+    set_display_hostname(session, display)
+    job.emit("log", f"Nom Netdata : {display}", 0.78, "netdata_name")
     job.emit("step", "Configuration du streaming vers 192.168.1.103…", 0.80, "netdata_stream")
     enable_streaming(session, settings["netdata_api_key"], settings["netdata_parent_url"])
     vm.netdata_guid = read_machine_guid(session)

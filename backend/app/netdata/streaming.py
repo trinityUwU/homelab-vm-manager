@@ -36,6 +36,27 @@ def install_netdata(session: SSHSession) -> None:
 GUID_FILE = "/var/lib/netdata/registry/netdata.public.unique.id"
 
 
+NETDATA_CONF = "/etc/netdata/netdata.conf"
+
+
+def set_display_hostname(session: SSHSession, display_name: str) -> None:
+    """Force le nom affiché du nœud côté parent via [global] hostname du
+    netdata.conf de l'enfant. Crée la section/clé si absente, la remplace sinon.
+    Sans restart ici : enable_streaming relance Netdata juste après."""
+    safe = display_name.replace("|", "/")
+    script = (
+        f'conf="{NETDATA_CONF}"; name="{safe}"; '
+        'if grep -q "^\\s*\\[global\\]" "$conf" 2>/dev/null; then '
+        'if grep -q "^\\s*hostname\\s*=" "$conf"; then '
+        'sed -i "s|^\\s*hostname\\s*=.*|    hostname = $name|" "$conf"; '
+        'else sed -i "/^\\s*\\[global\\]/a\\    hostname = $name" "$conf"; fi; '
+        'else printf "[global]\\n    hostname = %s\\n" "$name" >> "$conf"; fi'
+    )
+    code, _out, err = session.run(script, sudo=True)
+    if code != 0:
+        raise SSHError(f"définition du hostname Netdata échouée : {err[:200]}")
+
+
 def read_machine_guid(session: SSHSession) -> str | None:
     """Lit le MACHINE_GUID de l'enfant : c'est la clé sous laquelle le parent
     range ses données. Indispensable pour le purger du parent à la suppression."""
