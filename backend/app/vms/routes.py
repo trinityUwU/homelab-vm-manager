@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 
 from ..core.jobs import registry
 from ..core.ssh_client import SSHSession, test_connection
-from ..netdata.streaming import disable_streaming
+from ..netdata.parent import forget_node
+from ..netdata.streaming import disable_streaming, read_machine_guid
 from . import repository, status
 from .models import TestSSHRequest, VMCreate, VMUpdate
 from .provisioning import run_provisioning
@@ -87,14 +88,19 @@ def delete(vm_id: str) -> dict:
     online = status.ping(vm.static_ip)
     if online:
         _try_disable_streaming(vm)
+    forget_node(vm.netdata_guid or "")  # retire le nœud de l'interface du parent.
     repository.delete_vm(vm_id)
     state = "en ligne" if online else "hors ligne"
     return {"ok": True, "was_online": online, "message": f"VM « {vm.name} » ({state}) supprimée"}
 
 
 def _try_disable_streaming(vm) -> None:
+    """Coupe le streaming côté enfant et récupère son GUID s'il manque encore
+    (VM provisionnée avant le suivi du GUID), pour pouvoir le purger du parent."""
     try:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
+            if not vm.netdata_guid:
+                vm.netdata_guid = read_machine_guid(session)
             disable_streaming(session)
     except Exception:  # noqa: BLE001 — best effort, la suppression doit aboutir.
         pass

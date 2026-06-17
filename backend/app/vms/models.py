@@ -42,6 +42,7 @@ class VM(VMBase):
     last_update_applied: str | None = None
     pending_updates: int = 0
     last_check: str | None = None
+    netdata_guid: str | None = None  # MACHINE_GUID de l'enfant, pour le purger du parent.
 
 
 class TestSSHRequest(BaseModel):

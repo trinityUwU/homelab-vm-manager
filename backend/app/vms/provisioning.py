@@ -12,7 +12,12 @@ from ..core.ssh_client import SSHError, SSHSession
 from ..motd.apply import apply_motd
 from ..motd.render import render
 from ..netdata.parent import ensure_parent_accepts
-from ..netdata.streaming import enable_streaming, ensure_prerequisites, install_netdata
+from ..netdata.streaming import (
+    enable_streaming,
+    ensure_prerequisites,
+    install_netdata,
+    read_machine_guid,
+)
 from .models import VM
 from .network import apply_static_ip, wait_for_host
 from .repository import mark_provisioned, save_vm
@@ -53,6 +58,7 @@ def _install_monitoring(job: Job, session: SSHSession, vm: VM, settings: dict) -
     install_netdata(session)
     job.emit("step", "Configuration du streaming vers 192.168.1.103…", 0.80, "netdata_stream")
     enable_streaming(session, settings["netdata_api_key"], settings["netdata_parent_url"])
+    vm.netdata_guid = read_machine_guid(session)
 
 
 def _apply_motd(job: Job, session: SSHSession, vm: VM, settings: dict) -> None:

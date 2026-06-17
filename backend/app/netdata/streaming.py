@@ -33,6 +33,17 @@ def install_netdata(session: SSHSession) -> None:
         raise SSHError(f"installation Netdata échouée : {err[:300]}")
 
 
+GUID_FILE = "/var/lib/netdata/registry/netdata.public.unique.id"
+
+
+def read_machine_guid(session: SSHSession) -> str | None:
+    """Lit le MACHINE_GUID de l'enfant : c'est la clé sous laquelle le parent
+    range ses données. Indispensable pour le purger du parent à la suppression."""
+    code, out, _err = session.run(f"cat {GUID_FILE} 2>/dev/null")
+    guid = out.strip()
+    return guid if code == 0 and guid else None
+
+
 def _stream_block(api_key: str, parent: str) -> str:
     return (
         "[stream]\n"

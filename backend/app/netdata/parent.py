@@ -5,11 +5,14 @@ côté parent, dans /etc/netdata/stream.conf, par une section `[<clé>]`. L'app
 tournant sur le host, on écrit cette section en local (idempotent) : sans elle,
 chaque VM streame dans le vide et n'apparaît jamais dans l'interface centrale.
 """
+import shutil
 import subprocess
+from pathlib import Path
 
 from loguru import logger
 
 PARENT_STREAM_CONF = "/etc/netdata/stream.conf"
+PARENT_CACHE_DIR = Path("/var/cache/netdata")
 
 
 def _section(api_key: str) -> str:
@@ -53,4 +56,28 @@ def ensure_parent_accepts(api_key: str) -> bool:
         return True
     except (OSError, subprocess.SubprocessError) as exc:
         logger.error(f"Configuration du parent Netdata échouée : {exc}")
+        return False
+
+
+def forget_node(machine_guid: str) -> bool:
+    """Supprime un nœud de l'interface du parent : on efface ses données en
+    cache (rangées sous son MACHINE_GUID) puis on redémarre Netdata. Sans ça, le
+    nœud reste affiché en « stale » indéfiniment. Idempotent, best-effort."""
+    if not machine_guid:
+        return False
+    node_dir = PARENT_CACHE_DIR / machine_guid
+    if not node_dir.is_dir():
+        return False
+    try:
+        shutil.rmtree(node_dir)
+        subprocess.run(
+            ["systemctl", "restart", "netdata"],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        logger.info(f"Nœud purgé du parent Netdata : {machine_guid[:8]}…")
+        return True
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error(f"Purge du nœud {machine_guid[:8]}… échouée : {exc}")
         return False
