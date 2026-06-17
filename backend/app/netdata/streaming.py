@@ -12,6 +12,17 @@ STREAM_CONF = "/etc/netdata/stream.conf"
 KICKSTART = "https://my-netdata.io/kickstart.sh"
 
 
+def ensure_prerequisites(session: SSHSession) -> None:
+    """Installe les outils requis par le kickstart Netdata s'ils manquent (idempotent)."""
+    cmd = (
+        "command -v wget >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 "
+        "|| (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y wget curl ca-certificates)"
+    )
+    code, _out, err = session.run(cmd, sudo=True)
+    if code != 0:
+        raise SSHError(f"installation des prérequis échouée : {err[:300]}")
+
+
 def install_netdata(session: SSHSession) -> None:
     cmd = (
         f"wget -qO /tmp/kickstart.sh {KICKSTART} && "

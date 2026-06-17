@@ -54,14 +54,21 @@ class SSHSession:
             self._client = None
 
     def run(self, command: str, sudo: bool = False) -> tuple[int, str, str]:
-        """Exécute une commande, renvoie (code retour, stdout, stderr)."""
+        """Exécute une commande, renvoie (code retour, stdout, stderr).
+
+        Privilèges : si l'utilisateur est déjà root, exécution directe (pas de
+        sudo, qui peut être absent d'une Debian minimale). Sinon `sudo -S` avec
+        le mot de passe injecté sur stdin."""
         if self._client is None:
             raise SSHError("session non connectée")
+        is_root = self.user == "root"
+        need_password = sudo and not is_root
         if sudo:
-            command = f"sudo -S -p '' bash -c {_shell_quote(command)}"
+            prefix = "" if is_root else "sudo -S -p '' "
+            command = f"{prefix}bash -c {_shell_quote(command)}"
         try:
             stdin, stdout, stderr = self._client.exec_command(command, timeout=60)
-            if sudo:
+            if need_password:
                 stdin.write(self.password + "\n")
                 stdin.flush()
             out = stdout.read().decode("utf-8", "replace")
