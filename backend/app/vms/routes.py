@@ -88,7 +88,7 @@ def delete(vm_id: str) -> dict:
     online = status.ping(vm.static_ip)
     if online:
         _try_disable_streaming(vm)
-    forget_node(vm.netdata_guid or "")  # retire le nœud de l'interface du parent.
+    forget_node(vm.netdata_guid or "", vm.name)  # retire le nœud de l'interface du parent.
     repository.delete_vm(vm_id)
     state = "en ligne" if online else "hors ligne"
     return {"ok": True, "was_online": online, "message": f"VM « {vm.name} » ({state}) supprimée"}

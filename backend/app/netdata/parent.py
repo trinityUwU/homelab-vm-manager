@@ -59,10 +59,33 @@ def ensure_parent_accepts(api_key: str) -> bool:
         return False
 
 
-def forget_node(machine_guid: str) -> bool:
-    """Supprime un nœud de l'interface du parent : on efface ses données en
-    cache (rangées sous son MACHINE_GUID) puis on redémarre Netdata. Sans ça, le
-    nœud reste affiché en « stale » indéfiniment. Idempotent, best-effort."""
+def _remove_stale(identifier: str) -> bool:
+    """Retire un nœud via `netdatacli remove-stale-node` (méthode officielle, pas
+    de restart). L'identifiant peut être un MACHINE_GUID, un hostname ou un node id."""
+    try:
+        result = subprocess.run(
+            ["netdatacli", "remove-stale-node", identifier],
+            capture_output=True,
+            timeout=15,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error(f"netdatacli remove-stale-node {identifier} : {exc}")
+        return False
+    if result.returncode == 0:
+        logger.info(f"Nœud retiré du parent Netdata : {identifier}")
+        return True
+    logger.warning(f"remove-stale-node {identifier} : {result.stderr.strip() or result.stdout.strip()}")
+    return False
+
+
+def forget_node(machine_guid: str, hostname: str = "") -> bool:
+    """Retire un nœud de l'interface du parent. Priorité à `netdatacli
+    remove-stale-node` (GUID puis hostname), repli sur la purge du cache + restart
+    si netdatacli est absent. Idempotent, best-effort — ne bloque pas la suppression."""
+    for identifier in (machine_guid, hostname):
+        if identifier and _remove_stale(identifier):
+            return True
     if not machine_guid:
         return False
     node_dir = PARENT_CACHE_DIR / machine_guid
@@ -76,7 +99,7 @@ def forget_node(machine_guid: str) -> bool:
             capture_output=True,
             timeout=30,
         )
-        logger.info(f"Nœud purgé du parent Netdata : {machine_guid[:8]}…")
+        logger.info(f"Nœud purgé (cache) du parent Netdata : {machine_guid[:8]}…")
         return True
     except (OSError, subprocess.SubprocessError) as exc:
         logger.error(f"Purge du nœud {machine_guid[:8]}… échouée : {exc}")
