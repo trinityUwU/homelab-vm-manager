@@ -43,6 +43,14 @@ def _restart_networking(session: SSHSession) -> None:
         pass  # la coupure réseau est le comportement normal du switch
 
 
+def _write_resolv_conf(session: SSHSession, static_ip: str) -> None:
+    """Écrit /etc/resolv.conf directement : sur Debian minimale (sans resolvconf),
+    la directive dns-nameservers est ignorée et la résolution DNS casse sinon."""
+    gateway = gateway_from_ip(static_ip)
+    content = f"nameserver {gateway}\nnameserver 1.1.1.1\n"
+    session.run(f"cat > /etc/resolv.conf <<'EOF'\n{content}EOF", sudo=True)
+
+
 def apply_static_ip(session: SSHSession, static_ip: str) -> None:
     """Écrit la config statique et l'applique. Coupe la session DHCP."""
     config = render_interfaces(static_ip)
@@ -50,6 +58,7 @@ def apply_static_ip(session: SSHSession, static_ip: str) -> None:
     code, _out, err = session.run(write_cmd, sudo=True)
     if code != 0:
         raise SSHError(f"écriture /etc/network/interfaces échouée : {err}")
+    _write_resolv_conf(session, static_ip)
     _restart_networking(session)
 
 

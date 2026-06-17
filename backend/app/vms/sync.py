@@ -9,7 +9,7 @@ from ..motd.apply import apply_motd, read_motd
 from ..motd.render import render
 from ..netdata.streaming import enable_streaming, is_streaming
 from .models import VM, now_iso
-from .network import ENI_PATH, render_interfaces, _restart_networking
+from .network import ENI_PATH, render_interfaces, _restart_networking, _write_resolv_conf
 from .repository import save_vm
 
 
@@ -20,6 +20,7 @@ def _check_ip(session: SSHSession, vm: VM) -> dict:
         return {"point": "IP statique", "status": "ok", "detail": f"{vm.static_ip} déjà correcte"}
     config = render_interfaces(vm.static_ip)
     session.run(f"cat > {ENI_PATH} <<'EOF'\n{config}EOF", sudo=True)
+    _write_resolv_conf(session, vm.static_ip)
     _restart_networking(session)
     return {"point": "IP statique", "status": "corrigé", "detail": f"reconfigurée vers {vm.static_ip}"}
 
