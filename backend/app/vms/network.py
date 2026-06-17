@@ -37,7 +37,7 @@ def render_netplan(static_ip: str) -> str:
 def apply_static_ip(session: SSHSession, static_ip: str) -> None:
     """Écrit le netplan statique et l'applique. Coupe le réseau en cours de route."""
     config = render_netplan(static_ip)
-    write_cmd = f"cat > {NETPLAN_PATH} <<'EOF'\n{config}EOF\nchmod 600 {NETPLAN_PATH}"
+    write_cmd = f"mkdir -p /etc/netplan && cat > {NETPLAN_PATH} <<'EOF'\n{config}EOF\nchmod 600 {NETPLAN_PATH}"
     code, _out, err = session.run(write_cmd, sudo=True)
     if code != 0:
         raise SSHError(f"écriture netplan échouée : {err}")

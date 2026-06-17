@@ -20,7 +20,7 @@ def _check_ip(session: SSHSession, vm: VM) -> dict:
         return {"point": "IP statique", "status": "ok", "detail": f"{vm.static_ip} déjà correcte"}
     from .network import render_netplan
     config = render_netplan(vm.static_ip)
-    cmd = f"cat > {NETPLAN_PATH} <<'EOF'\n{config}EOF\nchmod 600 {NETPLAN_PATH} && netplan apply"
+    cmd = f"mkdir -p /etc/netplan && cat > {NETPLAN_PATH} <<'EOF'\n{config}EOF\nchmod 600 {NETPLAN_PATH} && netplan apply"
     session.run(cmd, sudo=True)
     return {"point": "IP statique", "status": "corrigé", "detail": f"reconfigurée vers {vm.static_ip}"}
 
