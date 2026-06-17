@@ -32,9 +32,15 @@ def render_interfaces(static_ip: str) -> str:
 
 
 def _restart_networking(session: SSHSession) -> None:
-    # Coupe le réseau en cours de route (attendu). ifupdown2 (Proxmox) ou ifupdown.
-    cmd = "systemctl restart networking 2>/dev/null || ifreload -a 2>/dev/null || (ifdown ens18; ifup ens18)"
-    session.run(cmd, sudo=True)
+    """Redémarre le réseau de façon détachée : la commande rend la main avant que
+    la coupure n'intervienne, sinon elle tuerait la session SSH en plein milieu.
+    La déconnexion qui suit est attendue (on se reconnecte sur la nouvelle IP)."""
+    inner = "systemctl restart networking 2>/dev/null || ifreload -a 2>/dev/null || (ifdown ens18; ifup ens18)"
+    cmd = f"nohup bash -c 'sleep 2; {inner}' >/dev/null 2>&1 &"
+    try:
+        session.run(cmd, sudo=True)
+    except SSHError:
+        pass  # la coupure réseau est le comportement normal du switch
 
 
 def apply_static_ip(session: SSHSession, static_ip: str) -> None:

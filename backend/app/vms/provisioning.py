@@ -27,7 +27,7 @@ def _settings_or_raise() -> dict:
 def _switch_network(job: Job, vm: VM) -> SSHSession:
     job.emit("step", f"Connexion SSH sur l'IP DHCP {vm.dhcp_ip}…", 0.10, "ssh_dhcp")
     with SSHSession(vm.dhcp_ip, vm.ssh_user, vm.ssh_password) as dhcp:
-        job.emit("step", "Bascule en IP statique (netplan, ens18)…", 0.25, "netplan")
+        job.emit("step", "Bascule en IP statique (ens18)…", 0.25, "network")
         apply_static_ip(dhcp, vm.static_ip)
     job.emit("step", f"Attente de la VM sur {vm.static_ip} (le réseau coupe)…", 0.35, "wait")
     wait_for_host(vm.static_ip, vm.ssh_user, vm.ssh_password)
