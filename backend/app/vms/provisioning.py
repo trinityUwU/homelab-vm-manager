@@ -11,6 +11,7 @@ from ..core.jobs import Job
 from ..core.ssh_client import SSHError, SSHSession
 from ..motd.apply import apply_motd
 from ..motd.render import render
+from ..netdata.parent import ensure_parent_accepts
 from ..netdata.streaming import enable_streaming, ensure_prerequisites, install_netdata
 from .models import VM
 from .network import apply_static_ip, wait_for_host
@@ -73,6 +74,8 @@ def run_provisioning(job: Job, vm_id: str) -> None:
     try:
         settings = _settings_or_raise()
         job.emit("step", f"Provisioning de « {vm.name} »", 0.05, "start")
+        if ensure_parent_accepts(settings["netdata_api_key"]):
+            job.emit("log", "Clé API déclarée côté host Netdata (parent)", 0.07, "parent")
         session = _switch_network(job, vm) if vm.dhcp_ip else _connect_static(job, vm)
         _install_monitoring(job, session, vm, settings)
         _apply_motd(job, session, vm, settings)

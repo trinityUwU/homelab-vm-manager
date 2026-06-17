@@ -7,6 +7,7 @@ from ..core import store
 from ..core.ssh_client import SSHError, SSHSession
 from ..motd.apply import apply_motd, read_motd
 from ..motd.render import render
+from ..netdata.parent import ensure_parent_accepts
 from ..netdata.streaming import enable_streaming, is_streaming
 from .models import VM, now_iso
 from .network import (
@@ -42,6 +43,7 @@ def _check_motd(session: SSHSession, vm: VM, settings: dict) -> dict:
 
 
 def _check_netdata(session: SSHSession, settings: dict) -> dict:
+    ensure_parent_accepts(settings["netdata_api_key"])
     if is_streaming(session, settings["netdata_parent_url"]):
         return {"point": "Netdata", "status": "ok", "detail": "streame vers le parent"}
     enable_streaming(session, settings["netdata_api_key"], settings["netdata_parent_url"])
