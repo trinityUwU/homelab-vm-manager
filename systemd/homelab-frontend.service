@@ -1,0 +1,15 @@
+[Unit]
+Description=HomeLab VM Manager - Frontend (Vite)
+After=network.target homelab-backend.service
+
+[Service]
+Type=simple
+# Adaptez User et les chemins si votre installation diffère.
+User=trinity
+WorkingDirectory=/home/trinity/homelab-vm-manager/frontend
+ExecStart=/home/trinity/.bun/bin/bun run dev --host 0.0.0.0 --port 8421
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
