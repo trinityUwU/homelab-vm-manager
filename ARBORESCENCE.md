@@ -48,14 +48,17 @@ homelab-vm-manager/
     ├── vite.config.js            Proxy /api et /ws vers le backend
     ├── index.html
     └── src/
-        ├── main.jsx              Bootstrap React + Router
-        ├── App.jsx               Layout, sidebar, routes
+        ├── main.jsx              Bootstrap React + Router + import fonts Geist
+        ├── App.jsx               Layout, sidebar (indicateur actif layoutId), transitions de route
         ├── api/client.js         Wrappers fetch + ouverture WebSocket de job
-        ├── styles/global.css     Thème sombre, couleurs sémantiques bleu/orange
+        ├── styles/global.css     Design system à tokens (clean-minimal × bento-saas), dark only
         ├── components/
-        │   ├── Badges.jsx        Badges type (bleu/orange) et statut (online/offline)
-        │   ├── TypeSelector.jsx  Sélecteur Standard/Essentielle visuel
-        │   └── ProvisionConsole.jsx  Terminal live + barre de progression
+        │   ├── motion.js         Variants Framer partagés (stagger, rise, page, hover)
+        │   ├── icons.jsx         Jeu d'icônes inline (stroke unique, sans dépendance)
+        │   ├── AnimatedNumber.jsx  Compteur count-up au montage (KPI)
+        │   ├── Badges.jsx        Badges type (bleu/orange) et statut (dot online pulsé)
+        │   ├── TypeSelector.jsx  Sélecteur Standard/Essentielle visuel + hover lift
+        │   └── ProvisionConsole.jsx  Terminal live + barre de progression animée
         └── pages/
             ├── Dashboard.jsx     Compteurs + tableau des VMs
             ├── AddVM.jsx         Formulaire + test SSH + provisioning live

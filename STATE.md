@@ -21,6 +21,15 @@ settings, CRUD VM, aperçu MOTD OK). Frontend buildé sans erreur (Vite).
 - **Secrets** : isolés dans core/secrets (seal/reveal identité aujourd'hui).
 - Scripts start/stop/restart, services systemd, README copier-coller, docs.
 
+## Refonte UI (design system)
+- Direction : clean-minimal (skeleton) × bento-saas (skin dashboard). Dark only.
+- Type Geist + Geist Mono en local (fontsource, pas de CDN).
+- Couleur = sens uniquement : CTA pill clair (pas d'accent de marque), offline neutre,
+  max 2 couleurs/vue. Bleu=Standard / orange=Essentielle = marqueurs de catégorie.
+- Motion Framer Motion (pas de GSAP) : stagger reveal, count-up KPI, sidebar layoutId,
+  hover-lift tuiles, dot online pulsé, terminal animé, transitions de route.
+- Design system CSS maison à tokens (pas Tailwind). Build + rendu validés (0 erreur console).
+
 ## Décisions notables
 - Frontend en JSX (pas TS) : brief impose « React (Vite) » + simplicité lab.
 - Logs live via WebSocket + thread (Paramiko bloquant), pas SSE.

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { api } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
+import { IconSync, IconExternal, IconTrash, IconCheck } from "../components/icons.jsx";
+import { stagger, riseItem, EASE } from "../components/motion.js";
 
 export default function VMDetail() {
   const { id } = useParams();
@@ -12,7 +15,7 @@ export default function VMDetail() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { api.getVm(id).then(setVm); }, [id]);
-  if (!vm) return <div className="muted">Chargement…</div>;
+  if (!vm) return <div className="empty">Chargement…</div>;
 
   function set(key, val) { setVm((v) => ({ ...v, [key]: val })); }
 
@@ -30,10 +33,8 @@ export default function VMDetail() {
 
   async function sync() {
     setBusy(true); setReport(null); setMsg(null);
-    try {
-      const r = await api.syncVm(id);
-      setReport(r);
-    } catch (e) { setMsg({ ok: false, text: e.message }); }
+    try { setReport(await api.syncVm(id)); }
+    catch (e) { setMsg({ ok: false, text: e.message }); }
     setBusy(false);
   }
 
@@ -45,54 +46,55 @@ export default function VMDetail() {
   }
 
   return (
-    <div>
-      <div className="page-title">{vm.name}</div>
-      <div className="page-sub">{vm.static_ip} · {vm.provisioned ? "provisionnée" : "non provisionnée"}</div>
+    <motion.div variants={stagger} initial="hidden" animate="show">
+      <motion.div className="page-head" variants={riseItem}>
+        <div className="page-title">{vm.name}</div>
+        <div className="page-sub"><span className="mono">{vm.static_ip}</span> · {vm.provisioned ? "provisionnée" : "non provisionnée"}</div>
+      </motion.div>
 
-      <div className="panel">
-        <h2>Modifier</h2>
+      <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Configuration</h2></div>
         <div className="grid-2">
           <div className="field"><label>Nom</label><input value={vm.name} onChange={(e) => set("name", e.target.value)} /></div>
-          <div className="field"><label>IP statique</label><input value={vm.static_ip} onChange={(e) => set("static_ip", e.target.value)} /></div>
-          <div className="field"><label>Ports</label><input value={vm.ports} onChange={(e) => set("ports", e.target.value)} /></div>
-          <div className="field"><label>Utilisateur SSH</label><input value={vm.ssh_user} onChange={(e) => set("ssh_user", e.target.value)} /></div>
+          <div className="field"><label>IP statique</label><input className="mono-input" value={vm.static_ip} onChange={(e) => set("static_ip", e.target.value)} /></div>
+          <div className="field"><label>Ports</label><input className="mono-input" value={vm.ports} onChange={(e) => set("ports", e.target.value)} /></div>
+          <div className="field"><label>Utilisateur SSH</label><input className="mono-input" value={vm.ssh_user} onChange={(e) => set("ssh_user", e.target.value)} /></div>
           <div className="field"><label>Mot de passe SSH</label><input type="password" value={vm.ssh_password} onChange={(e) => set("ssh_password", e.target.value)} /></div>
         </div>
         <div className="field"><label>Type</label><TypeSelector value={vm.vm_type} onChange={(v) => set("vm_type", v)} /></div>
         {msg && <div className={`msg ${msg.ok ? "msg-ok" : "msg-err"}`}>{msg.text}</div>}
         <div className="btn-row">
-          <button className="btn" onClick={save} disabled={busy}>Enregistrer</button>
-          <a className="btn btn-ghost" href={`http://${vm.static_ip}:19999`} target="_blank" rel="noreferrer">Dashboard Netdata →</a>
+          <button className="btn btn-primary" onClick={save} disabled={busy}>Enregistrer</button>
+          <a className="btn btn-ghost" href={`http://${vm.static_ip}:19999`} target="_blank" rel="noreferrer"><IconExternal /> Dashboard Netdata</a>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="panel">
-        <h2>Vérifier & Synchroniser</h2>
-        <p className="muted">Connexion SSH, vérifie IP / MOTD / Netdata. Ne touche qu'à ce qui est incorrect.</p>
-        <button className="btn btn-ghost" onClick={sync} disabled={busy} style={{ marginTop: 12 }}>
-          {busy ? "Vérification…" : "Lancer la vérification"}
-        </button>
+      <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Vérifier &amp; Synchroniser</h2></div>
+        <p className="hint">Connexion SSH, contrôle IP / MOTD / Netdata. Ne corrige que ce qui s'écarte du template — idempotent.</p>
+        <button className="btn btn-ghost" onClick={sync} disabled={busy}><IconSync /> {busy ? "Vérification…" : "Lancer la vérification"}</button>
+
         {report && !report.ok && <div className="msg msg-err">{report.error}</div>}
         {report && report.ok && (
-          <div style={{ marginTop: 16 }}>
+          <motion.div style={{ marginTop: 16 }} variants={stagger} initial="hidden" animate="show">
             {report.items.map((it, i) => (
-              <div className="report-line" key={i}>
-                <span style={{ color: it.status === "ok" ? "var(--online)" : "var(--essentielle)", minWidth: 80 }}>
-                  {it.status === "ok" ? "OK" : "Corrigé"}
+              <motion.div className="report-line" key={i} variants={riseItem}>
+                <span className={`report-tag ${it.status === "ok" ? "ok" : "fix"}`}>
+                  {it.status === "ok" ? <><IconCheck width={14} height={14} /> OK</> : "Corrigé"}
                 </span>
-                <strong style={{ minWidth: 110 }}>{it.point}</strong>
+                <strong style={{ minWidth: 96 }}>{it.point}</strong>
                 <span className="muted">{it.detail}</span>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
-      <div className="panel">
-        <h2>Suppression</h2>
-        <p className="muted">Désactive le streaming Netdata si la VM est joignable, puis retire la VM. Une VM éteinte n'est jamais supprimée automatiquement.</p>
-        <button className="btn btn-danger" onClick={remove} style={{ marginTop: 12 }}>Supprimer cette VM</button>
-      </div>
-    </div>
+      <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Suppression</h2></div>
+        <p className="hint">Désactive le streaming Netdata si la VM est joignable, puis la retire. Une VM éteinte n'est jamais supprimée automatiquement.</p>
+        <button className="btn btn-danger" onClick={remove}><IconTrash /> Supprimer cette VM</button>
+      </motion.div>
+    </motion.div>
   );
 }
