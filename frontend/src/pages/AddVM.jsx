@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api, openJobSocket } from "../api/client.js";
+import { api, openJobStream } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
 import ProvisionConsole from "../components/ProvisionConsole.jsx";
 import { IconBolt, IconCheck } from "../components/icons.jsx";
@@ -48,20 +48,20 @@ export default function AddVM() {
     try {
       const vm = await api.createVm(form);
       const { job_id } = await api.provision(vm.id);
-      const ws = openJobSocket(job_id, (ev) => handleEvent(ev, ws, vm.id));
+      const es = openJobStream(job_id, (ev) => handleEvent(ev, es, vm.id));
     } catch (e) {
       addLine(`Erreur : ${e.message}`, "err");
       setProvisioning(false);
     }
   }
 
-  function handleEvent(ev, ws, vmId) {
+  function handleEvent(ev, stream, vmId) {
     if (ev.progress != null) setProgress(ev.progress);
     if (ev.type === "step") addLine(`▸ ${ev.message}`, "info");
     if (ev.type === "result") {
       addLine(ev.message, ev.success ? "ok" : "err");
       setProvisioning(false);
-      ws.close();
+      stream.close();
       if (ev.success) setTimeout(() => navigate(`/vm/${vmId}`), 1600);
     }
   }

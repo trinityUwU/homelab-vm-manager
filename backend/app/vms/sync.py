@@ -9,7 +9,7 @@ from ..motd.apply import apply_motd, read_motd
 from ..motd.render import render
 from ..netdata.streaming import enable_streaming, is_streaming
 from .models import VM, now_iso
-from .network import NETPLAN_PATH
+from .network import ENI_PATH, render_interfaces, _restart_networking
 from .repository import save_vm
 
 
@@ -18,10 +18,9 @@ def _check_ip(session: SSHSession, vm: VM) -> dict:
     current = out.strip()
     if code == 0 and current == vm.static_ip:
         return {"point": "IP statique", "status": "ok", "detail": f"{vm.static_ip} déjà correcte"}
-    from .network import render_netplan
-    config = render_netplan(vm.static_ip)
-    cmd = f"mkdir -p /etc/netplan && cat > {NETPLAN_PATH} <<'EOF'\n{config}EOF\nchmod 600 {NETPLAN_PATH} && netplan apply"
-    session.run(cmd, sudo=True)
+    config = render_interfaces(vm.static_ip)
+    session.run(f"cat > {ENI_PATH} <<'EOF'\n{config}EOF", sudo=True)
+    _restart_networking(session)
     return {"point": "IP statique", "status": "corrigé", "detail": f"reconfigurée vers {vm.static_ip}"}
 
 

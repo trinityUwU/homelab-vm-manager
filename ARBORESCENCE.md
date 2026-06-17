@@ -16,7 +16,7 @@ homelab-vm-manager/
 │   ├── data/                     Stockage JSON (vms.json, settings.json) — créé au runtime
 │   └── app/
 │       ├── main.py               Point d'entrée FastAPI, monte les routers, lifespan scheduler
-│       ├── ws.py                 WebSocket de streaming des logs de provisioning
+│       ├── ws.py                 Flux SSE des logs de provisioning (/api/jobs/{id}/stream)
 │       ├── core/                 Briques transverses (shared)
 │       │   ├── config.py         Chemins, constantes réseau/Netdata, settings par défaut
 │       │   ├── store.py          Lecture/écriture JSON thread-safe (source de vérité disque)
@@ -28,7 +28,7 @@ homelab-vm-manager/
 │       │   ├── repository.py     CRUD JSON des VMs (via secrets)
 │       │   ├── routes.py         Endpoints HTTP du domaine VM
 │       │   ├── provisioning.py   Flux de provisioning étape par étape (live)
-│       │   ├── network.py        Bascule IP statique netplan + attente nouvelle IP
+│       │   ├── network.py        Bascule IP statique /etc/network/interfaces + attente nouvelle IP
 │       │   ├── sync.py           Vérifier & Synchroniser (idempotent : IP/MOTD/Netdata)
 │       │   ├── updates.py        Vérif et application des MAJ APT
 │       │   ├── updates_routes.py Endpoint de la page Mises à jour
@@ -50,7 +50,7 @@ homelab-vm-manager/
     └── src/
         ├── main.jsx              Bootstrap React + Router + import fonts Geist
         ├── App.jsx               Layout, sidebar (indicateur actif layoutId), transitions de route
-        ├── api/client.js         Wrappers fetch + ouverture WebSocket de job
+        ├── api/client.js         Wrappers fetch + ouverture flux SSE de job
         ├── styles/global.css     Design system à tokens (clean-minimal × bento-saas), dark only
         ├── components/
         │   ├── motion.js         Variants Framer partagés (stagger, rise, page, hover)

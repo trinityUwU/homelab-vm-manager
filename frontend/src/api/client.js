@@ -30,10 +30,10 @@ export const api = {
   previewMotd: (template, vmId) => request("POST", "/api/motd/preview", { template, vm_id: vmId || null }),
 };
 
-// Ouvre le WebSocket de logs d'un job de provisioning.
-export function openJobSocket(jobId, onEvent) {
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${window.location.host}/ws/jobs/${jobId}`);
-  ws.onmessage = (e) => onEvent(JSON.parse(e.data));
-  return ws;
+// Ouvre le flux SSE des logs d'un job de provisioning.
+export function openJobStream(jobId, onEvent) {
+  const es = new EventSource(`/api/jobs/${jobId}/stream`);
+  es.onmessage = (e) => onEvent(JSON.parse(e.data));
+  es.onerror = () => es.close();
+  return es;
 }
