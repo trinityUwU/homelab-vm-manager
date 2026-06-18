@@ -1,46 +1,62 @@
 # STATE — HomeLab VM Manager
 
 ## Statut global
-Application complète et lançable. Backend importé et testé en runtime (health,
-settings, CRUD VM, aperçu MOTD OK). Frontend buildé sans erreur (Vite).
+Application complète et lançable. Backend validé en runtime (santé, settings, CRUD,
+sync, scan, maintenance live, inspect système) — testé contre une vraie Pi (192.168.1.69).
+Frontend buildé sans erreur (Vite). Provisioning bout-en-bout reste à valider sur une
+VM Debian neuve (non rejouable depuis cette machine).
 
 ## Ce qui est livré
-- **Backend FastAPI** : 9 fonctionnalités câblées.
-  - Ajout VM + test SSH + provisioning séquentiel avec logs live (WebSocket).
-  - Switch réseau netplan (ens18) + attente reconnexion sur IP statique.
-  - Cas « déjà en statique » géré (dhcp_ip vide → saute les étapes réseau).
-  - Types Standard (MAJ auto) / Essentielle (MAJ notifiées seulement).
-  - Scheduler quotidien APScheduler (heure configurable, réarmé au changement).
-  - MOTD à balises dynamiques, dont {{VM_PORT_<N>}} pour N'IMPORTE quel port.
-  - Vérifier & Synchroniser idempotent (IP / MOTD / Netdata, ne touche que l'écart).
-  - Suppression manuelle (désactive streaming si online, distingue online/offline).
-  - Streaming Netdata enfant via stream.conf + clé partagée.
-- **Frontend React/Vite** (français) : Dashboard, Ajout, Détail/Sync, MAJ, MOTD
-  (aperçu live), Paramètres. Thème sombre, bleu (Standard) / orange (Essentielle).
-- **Stockage** : 2 fichiers JSON (vms, settings), module store thread-safe.
-- **Secrets** : isolés dans core/secrets (seal/reveal identité aujourd'hui).
-- Scripts start/stop/restart, services systemd, README copier-coller, docs.
 
-## Refonte UI (design system)
-- Direction : clean-minimal (skeleton) × bento-saas (skin dashboard). Dark only.
-- Type Geist + Geist Mono en local (fontsource, pas de CDN).
-- Couleur = sens uniquement : CTA pill clair (pas d'accent de marque), offline neutre,
-  max 2 couleurs/vue. Bleu=Standard / orange=Essentielle = marqueurs de catégorie.
-- Motion Framer Motion (pas de GSAP) : stagger reveal, count-up KPI, sidebar layoutId,
-  hover-lift tuiles, dot online pulsé, terminal animé, transitions de route.
-- Design system CSS maison à tokens (pas Tailwind). Build + rendu validés (0 erreur console).
+### Gestion VM (socle)
+- Ajout VM + test SSH + provisioning séquentiel avec logs live (SSE).
+- Switch réseau /etc/network/interfaces (interface détectée), attente reconnexion.
+- Types Standard (MAJ auto) / Essentielle (MAJ notifiées).
+- MOTD à balises dynamiques ; Vérifier & Synchroniser idempotent (IP/MOTD/Netdata).
+- Streaming Netdata enfant + purge du nœud parent à la suppression.
+
+### Mises à jour & historique
+- **Scan planifié** (APScheduler, heure configurable) + **« Lancer maintenant »**.
+- **Exclusion par VM** du scan automatique (`scan_excluded`).
+- **Journal d'événements** (`history/`) : scans et resync tracés avec date, machine,
+  **mode** (MAJ auto / notifié), **raison** (planifié / modif config / manuel), statut.
+- **Cycle de vie** des actions : chaque opération naît « en cours » puis passe à
+  terminé / appliqué / erreur — visible en direct (accompagnement, anti double-clic).
+- **Resync auto** sur modification d'un paramètre resyncable (MOTD/lab) — togglable.
+
+### Temps réel & notifications
+- **Bus d'événements** (`core/events`) + **flux SSE global** `/api/history/stream`.
+- `LiveProvider` : rafraîchit Dashboard / Updates en direct, sans refresh manuel.
+- **Toasts** bas-droite (Framer Motion) sur action terminée, avec redirection filtrée
+  vers la fiche machine ou les Mises à jour. Activables depuis les Paramètres.
+
+### Maintenance & polyvalence OS
+- **Actions paquets à la demande** depuis la fiche : vérifier / tout mettre à jour,
+  **sortie live** dans un terminal qui défile.
+- **Abstraction multi-OS** (`package_manager`) : apt/dnf/pacman/zypper/apk détectés
+  via le binaire présent. Scan, comptage et upgrade corrects sur chaque OS.
+- Upgrade 100% non-interactif (apt : `--force-confdef/--force-confold`, etc.).
+- **Infos système** (`sysinfo`, lecture seule) : OS + version, noyau, archi, interface,
+  IP actuelle, indicateur de MAJ. Affichées dans la fiche, rafraîchies à l'ouverture.
+- **Logos OS réels** (simple-icons, bundlé local) dans la fiche et le Dashboard.
+
+### Frontend
+- React/Vite (français), thème sombre, design system maison à tokens.
+- Sélecteurs custom (chevron SVG), dernière activité en temps relatif.
 
 ## Décisions notables
 - Frontend en JSX (pas TS) : brief impose « React (Vite) » + simplicité lab.
-- Logs live via WebSocket + thread (Paramiko bloquant), pas SSE.
-- Passerelle réseau déduite du /24 de l'IP statique (`x.y.z.1`).
-- Versions de deps en planchers (`>=`) : Python 3.14 sur la machine de build,
-  les versions épinglées n'avaient pas de wheels.
+- Logs/maintenance live via SSE + thread (Paramiko bloquant), pas WebSocket.
+- `exec_stream` sans PTY + `set_combine_stderr` : apt sort des lignes propres (pas de \r).
+- Détection du gestionnaire par binaire présent, pas par os-release (plus fiable).
+- Logos via simple-icons local (aucun CDN) — cohérent avec la souveraineté.
+- Versions de deps en planchers (`>=`) côté Python (build sur Python 3.14).
 
-## Points à valider sur le terrain (non testables hors vraie VM)
-- Provisioning bout-en-bout (SSH réel, netplan apply, kickstart Netdata).
-- `sudo -S` avec le mot de passe SSH suppose un user sudoer ; à confirmer en lab.
+## Points à valider sur le terrain (non testables hors vraie VM neuve)
+- Provisioning bout-en-bout (SSH réel, switch réseau, kickstart Netdata, MOTD).
+- Scan/upgrade réels sur OS non-apt (dnf/pacman/zypper/apk) : commandes posées,
+  non rejouées faute de machines cibles.
 
-## Hors scope (signalé, non implémenté — conforme au brief)
-- Multi-OS, auth de l'app, chiffrement (au-delà du module d'isolation), base de
-  données, clés SSH, tests automatisés.
+## Hors scope (signalé, conforme au brief)
+- Multi-OS du provisioning réseau (codé pour Debian), auth de l'app, chiffrement
+  au-delà du module d'isolation, base de données, clés SSH, tests automatisés.
