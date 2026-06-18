@@ -31,6 +31,7 @@ class VMUpdate(BaseModel):
     vm_type: VMType | None = None
     ssh_user: str | None = None
     ssh_password: str | None = None
+    scan_excluded: bool | None = None
 
 
 class VM(VMBase):
@@ -43,6 +44,16 @@ class VM(VMBase):
     pending_updates: int = 0
     last_check: str | None = None
     netdata_guid: str | None = None  # MACHINE_GUID de l'enfant, pour le purger du parent.
+    scan_excluded: bool = False      # Exclue du scan/MAJ automatique planifié.
+    # Informations système collectées en SSH (lecture seule), dernières connues.
+    os_id: str | None = None         # debian / ubuntu / fedora / arch / raspberrypi…
+    os_name: str | None = None       # PRETTY_NAME (ex « Debian GNU/Linux 12 (bookworm) »).
+    os_version: str | None = None    # VERSION_ID.
+    kernel: str | None = None        # uname -r.
+    arch: str | None = None          # uname -m (x86_64, aarch64…).
+    net_interface: str | None = None # Interface réseau réelle (eth0, ens18…).
+    current_ip: str | None = None    # IP active détectée sur l'interface.
+    sysinfo_at: str | None = None    # Horodatage de la dernière collecte.
 
 
 class TestSSHRequest(BaseModel):

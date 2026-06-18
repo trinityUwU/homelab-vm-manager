@@ -5,6 +5,10 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 VMS_FILE = DATA_DIR / "vms.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+HISTORY_FILE = DATA_DIR / "history.json"
+
+# Plafond du journal d'événements (scan / sync) — au-delà, on tronque le plus ancien.
+HISTORY_MAX_EVENTS = 1000
 
 # Interface réseau standard des VMs Proxmox.
 NET_INTERFACE = "ens18"
@@ -21,6 +25,11 @@ DEFAULT_SETTINGS = {
     "daily_check_enabled": True,
     "daily_check_hour": 3,
     "daily_check_minute": 0,
+    # Resynchronise automatiquement les VMs concernées quand un paramètre
+    # resyncable (MOTD, nom/ligne du lab) change. Effet de bord SSH — désactivable.
+    "auto_resync_on_config_change": True,
+    # Notifications toast en bas à droite quand une machine est mise à jour / resync.
+    "notifications_enabled": True,
     "lab_name": "HomeLab",
     "lab_line": "Géré par HomeLab VM Manager",
     "motd_template": (

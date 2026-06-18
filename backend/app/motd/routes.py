@@ -23,9 +23,15 @@ def get_template() -> dict:
 @router.put("/template")
 def save_template(body: dict) -> dict:
     s = store.read_settings()
-    s["motd_template"] = body.get("template", s["motd_template"])
+    new_template = body.get("template", s["motd_template"])
+    changed = new_template != s["motd_template"]
+    s["motd_template"] = new_template
     store.write_settings(s)
-    return {"ok": True}
+    resyncing = False
+    if changed:
+        from ..vms.auto_sync import resync_all
+        resyncing = resync_all("Template MOTD modifié")
+    return {"ok": True, "resyncing": resyncing}
 
 
 @router.post("/preview")

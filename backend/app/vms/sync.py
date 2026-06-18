@@ -5,6 +5,8 @@ Ne JAMAIS modifier ce qui est déjà correct. Chaque point renvoie soit
 """
 from ..core import store
 from ..core.ssh_client import SSHError, SSHSession
+from ..history import repository as history
+from ..history.models import EventKind, EventReason, EventStatus
 from ..motd.apply import apply_motd, read_motd
 from ..motd.render import render
 from ..netdata.parent import ensure_parent_accepts
@@ -50,9 +52,31 @@ def _check_netdata(session: SSHSession, settings: dict) -> dict:
     return {"point": "Netdata", "status": "corrigé", "detail": "streaming reconfiguré et relancé"}
 
 
-def sync_vm(vm: VM) -> dict:
-    """Connexion + 3 vérifications idempotentes. Renvoie un rapport structuré."""
+def _summarize(report: list[dict]) -> tuple[EventStatus, str]:
+    """Déduit statut + résumé lisible à partir des points du rapport."""
+    corriges = [r["point"] for r in report if r["status"] == "corrigé"]
+    if corriges:
+        return EventStatus.CHANGED, "Corrigé : " + ", ".join(corriges)
+    return EventStatus.OK, "Déjà conforme (IP, MOTD, Netdata)"
+
+
+def sync_vm(
+    vm: VM,
+    reason: EventReason = EventReason.MANUAL,
+    reason_detail: str = "",
+) -> dict:
+    """Connexion + 3 vérifications idempotentes. Journalise (en cours -> fini) et renvoie un rapport."""
     settings = store.read_settings()
+    event = history.record(
+        kind=EventKind.SYNC,
+        reason=reason,
+        reason_detail=reason_detail,
+        vm_id=vm.id,
+        vm_name=vm.name,
+        vm_type=vm.vm_type.value,
+        status=EventStatus.RUNNING,
+        summary="Vérification & synchronisation en cours…",
+    )
     try:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password) as session:
             report = [
@@ -63,6 +87,10 @@ def sync_vm(vm: VM) -> dict:
         vm.last_seen_online = True
         vm.last_check = now_iso()
         save_vm(vm)
+        status, summary = _summarize(report)
+        history.update_event(event.id, status=status, summary=summary, items=report)
         return {"ok": True, "items": report}
     except SSHError as exc:
-        return {"ok": False, "error": f"Connexion impossible : {exc}", "items": []}
+        summary = f"Connexion impossible : {exc}"
+        history.update_event(event.id, status=EventStatus.OFFLINE, summary=summary, items=[])
+        return {"ok": False, "error": summary, "items": []}

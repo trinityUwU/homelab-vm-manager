@@ -8,6 +8,7 @@ from loguru import logger
 
 from . import ws
 from .core import store
+from .history.routes import router as history_router
 from .motd.routes import router as motd_router
 from .schedule.daily import start_scheduler, stop_scheduler
 from .settings.routes import router as settings_router
@@ -38,6 +39,7 @@ app.include_router(vms_router)
 app.include_router(updates_router)
 app.include_router(settings_router)
 app.include_router(motd_router)
+app.include_router(history_router)
 app.include_router(ws.router)
 
 

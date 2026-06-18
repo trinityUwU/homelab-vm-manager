@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api } from "../api/client.js";
+import { api, openJobStream } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
-import { IconSync, IconExternal, IconTrash, IconCheck } from "../components/icons.jsx";
+import ProvisionConsole from "../components/ProvisionConsole.jsx";
+import OsLogo from "../components/OsLogo.jsx";
+import { relativeTime } from "../components/relativeTime.js";
+import { IconSync, IconExternal, IconTrash, IconCheck, IconBolt } from "../components/icons.jsx";
 import { stagger, riseItem, EASE } from "../components/motion.js";
 
 export default function VMDetail() {
@@ -13,9 +16,51 @@ export default function VMDetail() {
   const [msg, setMsg] = useState(null);
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [apt, setApt] = useState({ running: false, action: null, lines: [], progress: 0 });
+  const [inspecting, setInspecting] = useState(false);
 
-  useEffect(() => { api.getVm(id).then(setVm); }, [id]);
+  // Affiche d'abord les valeurs en cache, puis rafraîchit les infos système en SSH.
+  useEffect(() => {
+    let alive = true;
+    api.getVm(id).then((v) => { if (alive) setVm(v); });
+    setInspecting(true);
+    api.inspectVm(id).then((v) => { if (alive) setVm(v); }).finally(() => { if (alive) setInspecting(false); });
+    return () => { alive = false; };
+  }, [id]);
   if (!vm) return <div className="empty">Chargement…</div>;
+
+  async function refreshInfo() {
+    setInspecting(true);
+    try { setVm(await api.inspectVm(id)); } finally { setInspecting(false); }
+  }
+
+  async function runApt(action) {
+    if (apt.running) return;
+    if (action === "upgrade" && !confirm("Appliquer toutes les mises à jour sur cette machine ? Les paquets seront mis à niveau.")) return;
+    setApt({ running: true, action, lines: [], progress: 0.05 });
+    try {
+      const { job_id } = await api.runApt(id, action);
+      const es = openJobStream(job_id, (ev) => onApt(ev, es));
+    } catch (e) {
+      setApt((a) => ({ ...a, running: false, lines: [...a.lines, { text: `Erreur : ${e.message}`, kind: "err" }] }));
+    }
+  }
+
+  function onApt(ev, stream) {
+    setApt((a) => {
+      const next = { ...a };
+      if (ev.progress != null) next.progress = ev.progress;
+      if (ev.type === "step") next.lines = [...a.lines, { text: `▸ ${ev.message}`, kind: "info" }];
+      if (ev.type === "log") next.lines = [...a.lines, { text: ev.message, kind: "" }];
+      if (ev.type === "result") {
+        next.lines = [...a.lines, { text: ev.message, kind: ev.success ? "ok" : "err" }];
+        next.running = false;
+        stream.close();
+        api.getVm(id).then(setVm);
+      }
+      return next;
+    });
+  }
 
   function set(key, val) { setVm((v) => ({ ...v, [key]: val })); }
 
@@ -48,8 +93,43 @@ export default function VMDetail() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div className="page-head" variants={riseItem}>
-        <div className="page-title">{vm.name}</div>
+        <div className="page-title" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <OsLogo osId={vm.os_id} size={26} /> {vm.name}
+        </div>
         <div className="page-sub"><span className="mono">{vm.static_ip}</span> · {vm.provisioned ? "provisionnée" : "non provisionnée"}</div>
+      </motion.div>
+
+      <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2>Système</h2>
+          <button className="btn btn-ghost btn-xs" onClick={refreshInfo} disabled={inspecting}>
+            <IconSync /> {inspecting ? "Lecture…" : "Rafraîchir les infos"}
+          </button>
+        </div>
+        <div className="sysgrid">
+          <SysItem label="Système d'exploitation" value={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <OsLogo osId={vm.os_id} size={16} /> {vm.os_name || "—"}
+            </span>} />
+          <SysItem label="Noyau" value={vm.kernel || "—"} mono />
+          <SysItem label="Architecture" value={vm.arch || "—"} mono />
+          <SysItem label="Interface réseau" value={vm.net_interface || "—"} mono />
+          <SysItem label="IP actuelle" value={vm.current_ip || vm.static_ip} mono />
+          <SysItem label="Mises à jour" value={
+            vm.pending_updates > 0
+              ? <span className="badge badge-xs badge-essentielle">{vm.pending_updates} disponible(s)</span>
+              : <span className="badge badge-xs badge-ok">À jour</span>} />
+        </div>
+        <div className="btn-row" style={{ marginTop: 6 }}>
+          {vm.pending_updates > 0 && (
+            <button className="btn btn-primary" onClick={() => runApt("upgrade")} disabled={apt.running}>
+              <IconBolt /> Mettre à jour ({vm.pending_updates})
+            </button>
+          )}
+          <span className="stat-foot" style={{ alignSelf: "center" }}>
+            {vm.sysinfo_at ? `Relevé ${relativeTime(vm.sysinfo_at)}` : "Jamais relevé"}
+          </span>
+        </div>
       </motion.div>
 
       <motion.div className="panel" variants={riseItem}>
@@ -91,10 +171,37 @@ export default function VMDetail() {
       </motion.div>
 
       <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Maintenance système</h2></div>
+        <p className="hint">Vérifie ou applique les mises à jour avec le gestionnaire de la machine (apt, dnf, pacman…) et suis la sortie en direct.</p>
+        <div className="btn-row">
+          <button className="btn btn-ghost" onClick={() => runApt("update")} disabled={apt.running}>
+            <IconSync /> {apt.running && apt.action === "update" ? "Vérification…" : "Vérifier les mises à jour"}
+          </button>
+          <button className="btn btn-ghost" onClick={() => runApt("upgrade")} disabled={apt.running}>
+            <IconBolt /> {apt.running && apt.action === "upgrade" ? "Mise à niveau…" : "Tout mettre à jour"}
+          </button>
+        </div>
+        {(apt.running || apt.lines.length > 0) && (
+          <motion.div style={{ marginTop: 16 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }}>
+            <ProvisionConsole lines={apt.lines} progress={apt.progress} />
+          </motion.div>
+        )}
+      </motion.div>
+
+      <motion.div className="panel" variants={riseItem}>
         <div className="panel-head"><h2>Suppression</h2></div>
         <p className="hint">Désactive le streaming Netdata si la VM est joignable, puis la retire. Une VM éteinte n'est jamais supprimée automatiquement.</p>
         <button className="btn btn-danger" onClick={remove}><IconTrash /> Supprimer cette VM</button>
       </motion.div>
     </motion.div>
+  );
+}
+
+function SysItem({ label, value, mono = false }) {
+  return (
+    <div className="sysitem">
+      <div className="sysitem-label">{label}</div>
+      <div className={`sysitem-value ${mono ? "mono" : ""}`}>{value}</div>
+    </div>
   );
 }

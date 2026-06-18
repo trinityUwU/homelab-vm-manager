@@ -9,7 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from .config import DATA_DIR, DEFAULT_SETTINGS, SETTINGS_FILE, VMS_FILE
+from .config import DATA_DIR, DEFAULT_SETTINGS, HISTORY_FILE, SETTINGS_FILE, VMS_FILE
 
 _lock = threading.RLock()
 
@@ -57,3 +57,11 @@ def read_settings() -> dict:
 
 def write_settings(settings: dict) -> None:
     _write(SETTINGS_FILE, settings)
+
+
+def read_history() -> list[dict]:
+    return _read(HISTORY_FILE, [])
+
+
+def write_history(events: list[dict]) -> None:
+    _write(HISTORY_FILE, events)

@@ -22,7 +22,17 @@ export const api = {
   testSsh: (data) => request("POST", "/api/vms/test-ssh", data),
   provision: (id) => request("POST", `/api/vms/${id}/provision`),
   syncVm: (id) => request("POST", `/api/vms/${id}/sync`),
+  runApt: (id, action) => request("POST", `/api/vms/${id}/apt/${action}`),
+  inspectVm: (id) => request("POST", `/api/vms/${id}/inspect`),
   getUpdates: () => request("GET", "/api/updates"),
+  runScanNow: () => request("POST", "/api/updates/run-now"),
+  getHistory: ({ vmId, kind } = {}) => {
+    const qs = new URLSearchParams();
+    if (vmId) qs.set("vm_id", vmId);
+    if (kind) qs.set("kind", kind);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request("GET", `/api/history${suffix}`);
+  },
   getSettings: () => request("GET", "/api/settings"),
   saveSettings: (data) => request("PUT", "/api/settings", data),
   getMotd: () => request("GET", "/api/motd/template"),
@@ -35,5 +45,13 @@ export function openJobStream(jobId, onEvent) {
   const es = new EventSource(`/api/jobs/${jobId}/stream`);
   es.onmessage = (e) => onEvent(JSON.parse(e.data));
   es.onerror = () => es.close();
+  return es;
+}
+
+// Flux temps réel global des événements du journal (scans, resync).
+// EventSource gère seul la reconnexion : on ne ferme pas sur erreur.
+export function openEventStream(onEvent) {
+  const es = new EventSource("/api/history/stream");
+  es.onmessage = (e) => onEvent(JSON.parse(e.data));
   return es;
 }

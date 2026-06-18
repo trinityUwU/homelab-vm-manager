@@ -183,6 +183,12 @@ button { font-family: inherit; }
 .badge-standard { color: #bcd9ff; background: rgba(74, 158, 255, 0.12); border-color: rgba(74, 158, 255, 0.22); }
 .badge-essentielle { color: #ffd9a0; background: rgba(240, 160, 48, 0.12); border-color: rgba(240, 160, 48, 0.24); }
 .badge-soft { color: var(--text-secondary); background: rgba(255, 255, 255, 0.04); border-color: var(--border-subtle); }
+.badge-ok { color: #56e0b0; background: rgba(0, 216, 138, 0.10); border-color: rgba(0, 216, 138, 0.22); }
+.badge-danger { color: #ff8095; background: rgba(255, 77, 106, 0.10); border-color: rgba(255, 77, 106, 0.24); }
+.badge-muted { color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border-color: var(--border-subtle); }
+.badge-xs { padding: 3px 8px; font-size: 11px; }
+.badge-running { color: #bcd9ff; background: rgba(74, 158, 255, 0.10); border-color: rgba(74, 158, 255, 0.28); }
+.badge-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--standard); box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.5); animation: pulse 1.6s var(--ease-out) infinite; }
 
 .status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
 .status.online { color: var(--online); }
@@ -220,6 +226,21 @@ input:focus, textarea:focus, select:focus {
 }
 textarea { resize: vertical; min-height: 90px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
 .mono-input { font-family: var(--font-mono); }
+
+/* Selects : rendu natif désactivé, chevron SVG maison, couleurs du thème sombre */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239099a8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+select:hover { border-color: var(--border-strong); }
+/* Le menu déroulant lui-même (options) suit le thème sombre */
+select option { background: var(--bg-elevated); color: var(--text-primary); }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -319,3 +340,23 @@ textarea { resize: vertical; min-height: 90px; font-family: var(--font-mono); fo
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
 .switch input { width: auto; }
 .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 14px; }
+
+/* Notifications toast (bas-droite) */
+.toast-stack { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; flex-direction: column; gap: 12px; width: 340px; max-width: calc(100vw - 44px); pointer-events: none; }
+.toast { pointer-events: auto; position: relative; display: flex; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--r-md); box-shadow: var(--shadow-pop); overflow: hidden; }
+.toast-bar { width: 3px; background: var(--toast-accent); flex-shrink: 0; }
+.toast-body { padding: 13px 14px; flex: 1; min-width: 0; }
+.toast-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.toast-title { font-weight: 560; font-size: 14px; color: var(--text-primary); }
+.toast-x { background: none; border: none; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; width: auto; }
+.toast-x:hover { color: var(--text-primary); }
+.toast-badges { display: flex; gap: 6px; margin: 9px 0 8px; }
+.toast-msg { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+.toast-actions { display: flex; gap: 8px; margin-top: 12px; }
+.btn-xs { padding: 5px 11px; font-size: 12px; }
+
+/* Grille d'infos système (fiche machine) */
+.sysgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px 24px; margin-bottom: 18px; }
+.sysitem-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 5px; }
+.sysitem-value { font-size: 13.5px; color: var(--text-primary); display: flex; align-items: center; min-height: 22px; }
+.sysitem-value.mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-secondary); }

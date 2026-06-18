@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { api } from "../api/client.js";
+import { useLive } from "../components/live/LiveContext.jsx";
+import { relativeTime } from "../components/relativeTime.js";
 import { TypeBadge, StatusBadge } from "../components/Badges.jsx";
+import OsLogo from "../components/OsLogo.jsx";
 import AnimatedNumber from "../components/AnimatedNumber.jsx";
 import { IconRefresh, IconExternal, IconServer } from "../components/icons.jsx";
 import { stagger, riseItem } from "../components/motion.js";
@@ -18,6 +21,7 @@ export default function Dashboard() {
   const [vms, setVms] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { version } = useLive();
 
   async function load(refresh) {
     setLoading(true);
@@ -25,7 +29,10 @@ export default function Dashboard() {
     setVms(data);
     setLoading(false);
   }
+  const reloadSilent = useCallback(() => api.listVms().then(setVms), []);
   useEffect(() => { load(false); }, []);
+  // Temps réel : un événement (scan/resync) met à jour la dernière activité sans ping.
+  useEffect(() => { if (version) reloadSilent(); }, [version, reloadSilent]);
 
   const online = vms.filter((v) => v.last_seen_online).length;
   const pending = vms.reduce((n, v) => n + (v.pending_updates || 0), 0);
@@ -61,16 +68,18 @@ export default function Dashboard() {
         ) : (
           <table className="tbl">
             <thead>
-              <tr><th>Nom</th><th>IP statique</th><th>Type</th><th>Statut</th><th>Dernière MAJ</th><th>Netdata</th></tr>
+              <tr><th>Nom</th><th>IP statique</th><th>Type</th><th>Statut</th><th>Dernière activité</th><th>Netdata</th></tr>
             </thead>
             <motion.tbody variants={stagger} initial="hidden" animate="show">
               {vms.map((vm) => (
                 <motion.tr key={vm.id} variants={riseItem} onClick={() => navigate(`/vm/${vm.id}`)}>
-                  <td style={{ display: "flex", alignItems: "center", gap: 9 }}><IconServer width={15} height={15} style={{ opacity: 0.5 }} /> {vm.name}</td>
+                  <td style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    {vm.os_id ? <OsLogo osId={vm.os_id} size={16} /> : <IconServer width={15} height={15} style={{ opacity: 0.5 }} />} {vm.name}
+                  </td>
                   <td className="mono">{vm.static_ip}</td>
                   <td><TypeBadge type={vm.vm_type} /></td>
                   <td><StatusBadge online={vm.last_seen_online} /></td>
-                  <td className="muted">{vm.last_update_applied || "—"}</td>
+                  <td className="muted" title={vm.last_check || ""}>{relativeTime(vm.last_check)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <a className="link-ext" href={`http://${vm.static_ip}:19999`} target="_blank" rel="noreferrer">Ouvrir <IconExternal width={13} height={13} /></a>
                   </td>

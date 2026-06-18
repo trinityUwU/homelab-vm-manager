@@ -8,6 +8,8 @@ import VMDetail from "./pages/VMDetail.jsx";
 import Updates from "./pages/Updates.jsx";
 import Motd from "./pages/Motd.jsx";
 import Settings from "./pages/Settings.jsx";
+import { LiveProvider } from "./components/live/LiveContext.jsx";
+import ToastStack from "./components/live/ToastStack.jsx";
 
 const NAV = [
   { to: "/", end: true, label: "Dashboard", Icon: IconDash },
@@ -61,11 +63,14 @@ function AnimatedRoutes() {
 
 export default function App() {
   return (
-    <div className="layout">
-      <Sidebar />
-      <main className="content">
-        <AnimatedRoutes />
-      </main>
-    </div>
+    <LiveProvider>
+      <div className="layout">
+        <Sidebar />
+        <main className="content">
+          <AnimatedRoutes />
+        </main>
+      </div>
+      <ToastStack />
+    </LiveProvider>
   );
 }

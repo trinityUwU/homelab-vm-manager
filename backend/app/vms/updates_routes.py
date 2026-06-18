@@ -1,4 +1,6 @@
-"""Page Mises à jour : VMs Essentielles à notifier, VMs Standard et leur dernière MAJ."""
+"""Page Mises à jour : aperçu, machines surveillées, déclenchement manuel du scan."""
+import threading
+
 from fastapi import APIRouter
 
 from .models import VMType
@@ -15,9 +17,26 @@ def updates_overview() -> dict:
         for v in vms
         if v.vm_type == VMType.ESSENTIELLE and v.pending_updates > 0
     ]
-    standard = [
-        {"id": v.id, "name": v.name, "static_ip": v.static_ip, "last_update_applied": v.last_update_applied}
+    machines = [
+        {
+            "id": v.id,
+            "name": v.name,
+            "static_ip": v.static_ip,
+            "vm_type": v.vm_type.value,
+            "scan_excluded": v.scan_excluded,
+            "last_check": v.last_check,
+            "last_update_applied": v.last_update_applied,
+            "pending": v.pending_updates,
+        }
         for v in vms
-        if v.vm_type == VMType.STANDARD
     ]
-    return {"essentielles": essentielles, "standard": standard}
+    return {"essentielles": essentielles, "machines": machines}
+
+
+@router.post("/run-now")
+def run_now() -> dict:
+    """Lance immédiatement un scan de toutes les VMs non exclues (en arrière-plan)."""
+    from ..history.models import EventReason
+    from ..schedule.daily import run_daily_check
+    threading.Thread(target=run_daily_check, args=(EventReason.MANUAL,), daemon=True).start()
+    return {"started": True}

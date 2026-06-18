@@ -9,6 +9,8 @@ from loguru import logger
 
 from ..core import store
 from ..core.ssh_client import SSHError, SSHSession
+from ..history import repository as history
+from ..history.models import EventKind, EventReason, EventStatus
 from ..vms.models import VM, VMType, now_iso
 from ..vms.repository import list_vms, save_vm
 from ..vms.status import ping
@@ -18,33 +20,64 @@ _scheduler = BackgroundScheduler()
 _JOB_ID = "daily_check"
 
 
-def _process_vm(vm: VM) -> None:
+def _process_vm(vm: VM, reason: EventReason) -> None:
+    event = history.record(
+        kind=EventKind.SCAN,
+        reason=reason,
+        vm_id=vm.id,
+        vm_name=vm.name,
+        vm_type=vm.vm_type.value,
+        status=EventStatus.RUNNING,
+        summary="Vérification des mises à jour en cours…",
+    )
     if not ping(vm.static_ip):
         vm.last_seen_online = False
         vm.last_check = now_iso()
         save_vm(vm)
+        _finish_scan(event.id, EventStatus.OFFLINE, "VM injoignable (ping échoué)", 0, 0)
         return
+    status, summary, pending, applied = _scan_online(vm)
+    vm.last_check = now_iso()
+    save_vm(vm)
+    _finish_scan(event.id, status, summary, pending, applied)
+
+
+def _scan_online(vm: VM) -> tuple[EventStatus, str, int, int]:
+    """Connexion SSH + comptage/application des MAJ. Renvoie (statut, résumé, pending, applied)."""
+    pending = applied = 0
     try:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password) as session:
             pending = count_pending(session)
             if vm.vm_type == VMType.STANDARD and pending > 0:
                 apply_upgrades(session)
                 vm.last_update_applied = now_iso()
-                pending = 0
+                applied, pending = pending, 0
+                status, summary = EventStatus.CHANGED, f"{applied} mise(s) à jour appliquée(s)"
+            elif vm.vm_type == VMType.ESSENTIELLE and pending > 0:
+                status, summary = EventStatus.NOTIFIED, f"{pending} mise(s) à jour disponible(s), non appliquées"
+            else:
+                status, summary = EventStatus.OK, "Système à jour, rien à faire"
             vm.pending_updates = pending
         vm.last_seen_online = True
+        return status, summary, pending, applied
     except SSHError as exc:
-        logger.warning(f"Check quotidien {vm.name} : {exc}")
+        logger.warning(f"Check {vm.name} : {exc}")
         vm.last_seen_online = False
-    vm.last_check = now_iso()
-    save_vm(vm)
+        return EventStatus.ERROR, f"Échec SSH : {exc}", pending, applied
 
 
-def run_daily_check() -> None:
-    logger.info("Démarrage de la vérification quotidienne")
+def _finish_scan(event_id: str, status: EventStatus, summary: str, pending: int, applied: int) -> None:
+    history.update_event(event_id, status=status, summary=summary, items=[{"pending": pending, "applied": applied}])
+
+
+def run_daily_check(reason: EventReason = EventReason.SCHEDULED) -> None:
+    """Scanne toutes les VMs non exclues. `reason` distingue planifié / manuel."""
+    logger.info("Démarrage de la vérification des mises à jour")
     for vm in list_vms():
-        _process_vm(vm)
-    logger.info("Vérification quotidienne terminée")
+        if vm.scan_excluded:
+            continue
+        _process_vm(vm, reason)
+    logger.info("Vérification terminée")
 
 
 def reschedule() -> None:

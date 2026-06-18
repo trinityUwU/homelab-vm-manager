@@ -16,6 +16,7 @@ export default function Settings() {
     setMsg(null);
     try {
       await api.saveSettings(s);
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: s }));
       setMsg({ ok: true, text: "Paramètres enregistrés" });
     } catch (e) { setMsg({ ok: false, text: e.message }); }
     setTimeout(() => setMsg(null), 2500);
@@ -25,7 +26,7 @@ export default function Settings() {
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div className="page-head" variants={riseItem}>
         <div className="page-title">Paramètres globaux</div>
-        <div className="page-sub">SSH par défaut, Netdata, vérification quotidienne, texte du MOTD.</div>
+        <div className="page-sub">SSH par défaut, Netdata, texte fixe du MOTD. La planification est dans « Mises à jour ».</div>
       </motion.div>
 
       <motion.div className="panel" variants={riseItem}>
@@ -46,23 +47,20 @@ export default function Settings() {
       </motion.div>
 
       <motion.div className="panel" variants={riseItem}>
-        <div className="panel-head"><h2>Vérification quotidienne</h2></div>
-        <label className="switch field" style={{ marginBottom: 18 }}>
-          <input type="checkbox" checked={s.daily_check_enabled} onChange={(e) => set("daily_check_enabled", e.target.checked)} />
-          <span>Activer le check automatique quotidien</span>
-        </label>
-        <div className="grid-2">
-          <div className="field"><label>Heure</label><input type="number" min="0" max="23" value={s.daily_check_hour} onChange={(e) => set("daily_check_hour", Number(e.target.value))} /></div>
-          <div className="field"><label>Minute</label><input type="number" min="0" max="59" value={s.daily_check_minute} onChange={(e) => set("daily_check_minute", Number(e.target.value))} /></div>
-        </div>
-      </motion.div>
-
-      <motion.div className="panel" variants={riseItem}>
         <div className="panel-head"><h2>MOTD — texte fixe</h2></div>
         <div className="grid-2">
           <div className="field"><label>Nom du lab — {"{{LAB_NAME}}"}</label><input value={s.lab_name} onChange={(e) => set("lab_name", e.target.value)} /></div>
           <div className="field"><label>Ligne personnalisée — {"{{LAB_LINE}}"}</label><input value={s.lab_line} onChange={(e) => set("lab_line", e.target.value)} /></div>
         </div>
+      </motion.div>
+
+      <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Notifications</h2></div>
+        <p className="hint">Affiche une notification en bas à droite quand une machine est mise à jour ou resynchronisée.</p>
+        <label className="switch field" style={{ margin: 0 }}>
+          <input type="checkbox" checked={s.notifications_enabled !== false} onChange={(e) => set("notifications_enabled", e.target.checked)} />
+          <span>Activer les notifications temps réel</span>
+        </label>
       </motion.div>
 
       {msg && <div className={`msg ${msg.ok ? "msg-ok" : "msg-err"}`}>{msg.text}</div>}
