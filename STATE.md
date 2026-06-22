@@ -1,5 +1,18 @@
 # STATE — HomeLab VM Manager
 
+## Session du 2026-06-22 — corrections terrain
+Deux bugs remontés du terrain, corrigés (non rejouables hors vraie VM, à valider) :
+- **IP static qui repassait en DHCP au reboot** → `network.harden_static_persistence()`
+  appelée dans `apply_static_ip`. Neutralise les couches qui reprennent la main au boot :
+  cloud-init (config réseau désactivée + fichiers purgés), NetworkManager (iface unmanaged),
+  systemd-networkd (désactivé), `interfaces.d` résiduel (déclarations DHCP de l'iface retirées).
+  Best effort conditionnel : sans risque sur une Debian ifupdown pure.
+- **Résidus à la suppression d'une VM** (Netdata, MOTD, conf réseau restaient) → nouveau
+  module `vms/teardown.py`. `teardown_machine()` désinstalle Netdata + purge `/etc/netdata`,
+  vide `/etc/motd`, remet l'iface en DHCP (en dernier, coupe la session). Câblé dans
+  `routes.delete` via `_teardown_remote` : le GUID est lu **avant** la purge de `/etc/netdata`
+  (sinon impossible de retirer le nœud du parent). `disable_streaming` retiré (dead code).
+
 ## Statut global
 Application complète et lançable. Backend validé en runtime (santé, settings, CRUD,
 sync, scan, maintenance live, inspect système) — testé contre une vraie Pi (192.168.1.69).

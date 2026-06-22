@@ -29,7 +29,8 @@ homelab-vm-manager/
 │       │   ├── repository.py     CRUD JSON des VMs (via secrets)
 │       │   ├── routes.py         Endpoints HTTP du domaine VM (CRUD, sync, inspect, apt, provision)
 │       │   ├── provisioning.py   Flux de provisioning étape par étape (live)
-│       │   ├── network.py        Bascule IP statique /etc/network/interfaces + attente nouvelle IP
+│       │   ├── network.py        Bascule IP statique + durcissement persistance (anti-DHCP reboot) + retour DHCP
+│       │   ├── teardown.py       Démantèlement à la suppression : désinstall Netdata + vide MOTD + iface DHCP
 │       │   ├── sync.py           Vérifier & Synchroniser (idempotent : IP/MOTD/Netdata) + journalise
 │       │   ├── sysinfo.py        Collecte SSH lecture seule : OS, noyau, archi, interface, IP
 │       │   ├── package_manager.py Abstraction multi-OS (apt/dnf/pacman/zypper/apk) détectée en live
@@ -43,7 +44,7 @@ homelab-vm-manager/
 │       │   ├── repository.py     record / update_event (rediffusé sur le bus) / list filtrée
 │       │   └── routes.py         Lecture filtrable + flux SSE temps réel (/api/history/stream)
 │       ├── netdata/
-│       │   ├── streaming.py      Install Netdata + config/désactivation streaming enfant
+│       │   ├── streaming.py      Install Netdata + config streaming enfant + lecture GUID/hostname
 │       │   └── parent.py         Déclaration/purge du nœud côté parent Netdata
 │       ├── motd/
 │       │   ├── render.py         Rendu du template à balises dynamiques
