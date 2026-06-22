@@ -50,6 +50,34 @@ def render_interfaces(static_ip: str, iface: str) -> str:
     )
 
 
+def harden_static_persistence(session: SSHSession, iface: str) -> None:
+    """Empêche le retour en DHCP au reboot : neutralise les couches qui
+    reprennent la main au boot et écraseraient /etc/network/interfaces.
+    Best effort multi-cause (cloud-init, NetworkManager, interfaces.d résiduel)."""
+    script = (
+        # cloud-init : désactive sa génération réseau + purge ses fichiers.
+        'if command -v cloud-init >/dev/null 2>&1; then '
+        'mkdir -p /etc/cloud/cloud.cfg.d; '
+        'printf "network: {config: disabled}\\n" '
+        '> /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg; '
+        'rm -f /etc/netplan/50-cloud-init.yaml '
+        '/etc/network/interfaces.d/50-cloud-init '
+        '/etc/network/interfaces.d/50-cloud-init.cfg; fi; '
+        # interfaces.d résiduel : retire toute déclaration DHCP de l'iface.
+        f'rm -f /etc/network/interfaces.d/*{iface}* 2>/dev/null; '
+        # NetworkManager actif : marque l'iface non gérée (ifupdown reprend).
+        'if systemctl is-active --quiet NetworkManager 2>/dev/null; then '
+        'mkdir -p /etc/NetworkManager/conf.d; '
+        f'printf "[keyfile]\\nunmanaged-devices=interface-name:{iface}\\n" '
+        '> /etc/NetworkManager/conf.d/99-homelab-unmanaged.conf; '
+        'nmcli connection reload 2>/dev/null || true; fi; '
+        # systemd-networkd actif : masque (ifupdown est notre source de vérité).
+        'systemctl is-enabled --quiet systemd-networkd 2>/dev/null '
+        '&& systemctl disable --now systemd-networkd 2>/dev/null || true'
+    )
+    session.run(script, sudo=True)
+
+
 def _restart_networking(session: SSHSession, iface: str) -> None:
     """Redémarre le réseau de façon détachée : la commande rend la main avant que
     la coupure n'intervienne, sinon elle tuerait la session SSH en plein milieu.
@@ -84,8 +112,33 @@ def apply_static_ip(session: SSHSession, static_ip: str) -> str:
     if code != 0:
         raise SSHError(f"écriture /etc/network/interfaces échouée : {err}")
     _write_resolv_conf(session, static_ip)
+    harden_static_persistence(session, iface)
     _restart_networking(session, iface)
     return iface
+
+
+def render_interfaces_dhcp(iface: str) -> str:
+    return (
+        "# Restauré par HomeLab VM Manager (retrait du lab)\n"
+        "auto lo\n"
+        "iface lo inet loopback\n\n"
+        f"auto {iface}\n"
+        f"iface {iface} inet dhcp\n"
+    )
+
+
+def restore_dhcp(session: SSHSession, iface: str) -> None:
+    """Remet l'interface en DHCP et lève le verrou cloud-init posé au provisioning.
+    Détaché : le réseau coupe (la machine quitte le lab), la coupure est attendue."""
+    config = render_interfaces_dhcp(iface)
+    write_cmd = (
+        f"cat > {ENI_PATH} <<'EOF'\n{config}EOF\n"
+        "rm -f /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg "
+        "/etc/NetworkManager/conf.d/99-homelab-unmanaged.conf 2>/dev/null; "
+        "rm -f /etc/resolv.conf 2>/dev/null"
+    )
+    session.run(write_cmd, sudo=True)
+    _restart_networking(session, iface)
 
 
 def wait_for_host(host: str, user: str, password: str, attempts: int = 12, delay: int = 5) -> None:

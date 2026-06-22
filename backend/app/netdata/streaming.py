@@ -82,15 +82,6 @@ def enable_streaming(session: SSHSession, api_key: str, parent: str = NETDATA_PA
         raise SSHError(f"configuration streaming échouée : {err}")
 
 
-def disable_streaming(session: SSHSession) -> None:
-    """Désactive le streaming côté enfant (utilisé à la suppression de la VM)."""
-    cmd = (
-        f"sed -i 's/^\\s*enabled\\s*=\\s*yes/    enabled = no/' {STREAM_CONF} "
-        "2>/dev/null; systemctl restart netdata 2>/dev/null || true"
-    )
-    session.run(cmd, sudo=True)
-
-
 def is_streaming(session: SSHSession, parent: str = NETDATA_PARENT) -> bool:
     code, _out, _err = session.run("systemctl is-active --quiet netdata")
     if code != 0:

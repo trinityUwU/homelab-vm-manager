@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException
 from ..core.jobs import registry
 from ..core.ssh_client import SSHSession, test_connection
 from ..netdata.parent import forget_node
-from ..netdata.streaming import disable_streaming, read_machine_guid
+from ..netdata.streaming import read_machine_guid
 from . import repository, status
 from .maintenance import APT_ACTIONS, run_apt
 from .models import TestSSHRequest, VMCreate, VMUpdate
 from .provisioning import run_provisioning
+from .teardown import teardown_machine
 from .sync import sync_vm
 from .sysinfo import inspect_vm
 
@@ -108,20 +109,21 @@ def delete(vm_id: str) -> dict:
         raise HTTPException(404, "VM introuvable")
     online = status.ping(vm.static_ip)
     if online:
-        _try_disable_streaming(vm)
+        _teardown_remote(vm)
     forget_node(vm.netdata_guid or "", vm.name)  # retire le nœud de l'interface du parent.
     repository.delete_vm(vm_id)
     state = "en ligne" if online else "hors ligne"
     return {"ok": True, "was_online": online, "message": f"VM « {vm.name} » ({state}) supprimée"}
 
 
-def _try_disable_streaming(vm) -> None:
-    """Coupe le streaming côté enfant et récupère son GUID s'il manque encore
-    (VM provisionnée avant le suivi du GUID), pour pouvoir le purger du parent."""
+def _teardown_remote(vm) -> None:
+    """Récupère le GUID s'il manque (pour purger le parent), puis démantèle la
+    machine : désinstalle Netdata, vide le MOTD, remet le réseau en DHCP. La
+    lecture du GUID précède le teardown qui efface /etc/netdata."""
     try:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
             if not vm.netdata_guid:
                 vm.netdata_guid = read_machine_guid(session)
-            disable_streaming(session)
+            teardown_machine(session)
     except Exception:  # noqa: BLE001 — best effort, la suppression doit aboutir.
         pass
