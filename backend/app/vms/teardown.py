@@ -8,9 +8,12 @@ la suppression côté app doit toujours aboutir.
 from loguru import logger
 
 from ..core import store
+from ..core.jobs import Job
 from ..core.ssh_client import SSHSession
 from ..motd.apply import MOTD_PATH
-from . import proxmox_host
+from ..netdata.parent import forget_node
+from ..netdata.streaming import read_machine_guid
+from . import proxmox_host, status
 
 
 def uninstall_netdata(session: SSHSession) -> None:
@@ -33,14 +36,23 @@ def clear_motd(session: SSHSession) -> None:
     session.run(f": > {MOTD_PATH}", sudo=True)
 
 
-def teardown_machine(session: SSHSession, vmid: int) -> None:
-    """Annule le provisioning côté machine, puis restaure le DHCP au niveau
-    net0 (hôte Proxmox). Chaque couche est best effort et tracée."""
-    for label, action in (("netdata", uninstall_netdata), ("motd", clear_motd)):
-        try:
-            action(session)
-        except Exception as exc:  # noqa: BLE001 — best effort par couche.
-            logger.warning(f"teardown {label} échoué : {exc}")
+def _teardown_guest(job: Job, vm) -> None:
+    """Netdata + MOTD côté invité. Best effort : la suppression doit aboutir
+    même si la machine coupe la connexion en cours de route."""
+    try:
+        with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
+            if not vm.netdata_guid:
+                vm.netdata_guid = read_machine_guid(session)
+            job.emit("step", "Désinstallation de Netdata…", 0.35, "netdata")
+            uninstall_netdata(session)
+            job.emit("step", "Purge du MOTD…", 0.55, "motd")
+            clear_motd(session)
+    except Exception as exc:  # noqa: BLE001 — best effort, la suppression doit aboutir.
+        logger.warning(f"teardown invité échoué : {exc}")
+
+
+def _restore_host_dhcp(vmid: int) -> None:
+    """Repasse net0 en DHCP côté hôte Proxmox. Best effort, même logique."""
     try:
         settings = store.read_settings()
         with SSHSession(
@@ -48,4 +60,32 @@ def teardown_machine(session: SSHSession, vmid: int) -> None:
         ) as host:
             proxmox_host.restore_dhcp(host, vmid)
     except Exception as exc:  # noqa: BLE001 — best effort, la suppression doit aboutir.
-        logger.warning(f"teardown réseau (retour DHCP net0) : {exc}")
+        logger.warning(f"retour DHCP net0 échoué : {exc}")
+
+
+def run_deletion(job: Job, vm_id: str) -> None:
+    """Point d'entrée exécuté dans un thread : démantèle puis retire l'enregistrement,
+    en poussant chaque étape dans le job pour une barre de progression réelle côté UI."""
+    from .repository import delete_vm, get_vm
+
+    vm = get_vm(vm_id)
+    if vm is None:
+        job.finish(False, "VM introuvable")
+        return
+
+    job.emit("step", f"Suppression de « {vm.name} »", 0.05, "start")
+    online = status.ping(vm.static_ip)
+    if online:
+        job.emit("step", f"Connexion à {vm.static_ip}…", 0.15, "connect")
+        _teardown_guest(job, vm)
+        job.emit("step", "Retour en DHCP (net0, hôte Proxmox)…", 0.70, "network")
+        _restore_host_dhcp(vm.vmid)
+    else:
+        job.emit("log", "Machine hors ligne — étapes distantes ignorées", 0.5, "offline")
+
+    job.emit("step", "Retrait du nœud Netdata parent…", 0.85, "parent")
+    forget_node(vm.netdata_guid or "", vm.name)
+    job.emit("step", "Suppression de l'enregistrement…", 0.95, "record")
+    delete_vm(vm_id)
+    state = "en ligne" if online else "hors ligne"
+    job.finish(True, f"VM « {vm.name} » ({state}) supprimée")

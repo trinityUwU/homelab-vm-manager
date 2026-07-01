@@ -21,24 +21,14 @@
       module `vms/proxmox_host.py`), support VM QEMU Debian pure abandonné.
 - [x] Netdata : timeout kickstart 60s -> 300s, erreur tronquée 300 -> 800 char + log,
       idempotence (skip si déjà actif).
+- [x] **Validé sur le terrain (2026-07-01, Alex)** : flux `pct set net0` complet
+      (provisioning, reboot, IP statique qui tient, teardown -> retour DHCP).
+- [x] Pop-up natifs (`confirm`/`alert`) remplacés par des modales custom
+      (`ConfirmDialog.jsx`, `ProgressDialog.jsx`), cohérentes avec le design system.
+- [x] Suppression d'une VM passée en job SSE (comme provisioning/apt) : barre de
+      progression réelle dans la modale au lieu d'un délai muet après le clic.
 
-## À valider sur le terrain — flux net0 (priorité, session 2026-07-01)
-
-### Le fix pct set net0 tient après reboot
-1. Renseigner l'hôte Proxmox + creds SSH root dans Paramètres.
-2. Ajouter un LXC (VMID + IP DHCP + IP statique cible) et provisionner.
-3. Confirmer la reconnexion sur l'IP statique juste après le provisioning.
-4. `pct config <vmid>` sur l'hôte : `net0` contient bien `ip=<static>/24,gw=...`.
-5. Reboot le conteneur (`pct reboot <vmid>` ou depuis le conteneur).
-6. **Vérif clé** : le conteneur répond toujours sur l'IP statique, `ip a` dedans
-   ne montre plus qu'une seule IPv4 (plus de DHCP en parallèle).
-
-### Teardown restaure bien le DHCP net0
-1. Supprimer une VM provisionnée depuis l'app.
-2. `pct config <vmid>` sur l'hôte : `net0` repasse à `ip=dhcp`, plus de `gw=`.
-3. Reboot le conteneur : reprend bien une IP DHCP normale.
-
-### Non-régression (déjà en attente)
+## En attente (non-régression, hors priorité actuelle)
 - [ ] Scan/upgrade réels sur un OS non-apt (Fedora/Arch/openSUSE/Alpine)
 - [ ] Comportement des commandes de comptage MAJ par gestionnaire (dnf/zypper/apk affinables)
 

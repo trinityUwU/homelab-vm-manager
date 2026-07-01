@@ -31,7 +31,7 @@ homelab-vm-manager/
 │       │   ├── provisioning.py   Flux de provisioning étape par étape (live)
 │       │   ├── proxmox_host.py   IP statique LXC via net0/pct set côté hôte Proxmox (source de vérité réseau)
 │       │   ├── network.py        Utilitaires invité lecture seule (détection interface, attente reconnexion)
-│       │   ├── teardown.py       Démantèlement à la suppression : désinstall Netdata + vide MOTD + net0 DHCP
+│       │   ├── teardown.py       Démantèlement à la suppression (en job, étapes live) : Netdata + MOTD + net0 DHCP
 │       │   ├── sync.py           Vérifier & Synchroniser (idempotent : IP/MOTD/Netdata) + journalise
 │       │   ├── sysinfo.py        Collecte SSH lecture seule : OS, noyau, archi, interface, IP
 │       │   ├── package_manager.py Abstraction multi-OS (apt/dnf/pacman/zypper/apk) détectée en live
@@ -74,6 +74,8 @@ homelab-vm-manager/
         │   ├── relativeTime.js   Horodatage ISO -> « il y a 3 min »
         │   ├── TypeSelector.jsx  Sélecteur Standard/Essentielle visuel + hover lift
         │   ├── ProvisionConsole.jsx  Terminal live + barre de progression animée
+        │   ├── ConfirmDialog.jsx Confirmation custom (remplace window.confirm natif)
+        │   ├── ProgressDialog.jsx Modale de progression live sur job SSE (ex: suppression)
         │   └── live/
         │       ├── LiveContext.jsx  Flux SSE global : version (refresh pages) + toasts gatés
         │       └── ToastStack.jsx   Notifications bas-droite animées (Framer) + redirection filtrée

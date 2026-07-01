@@ -4,14 +4,12 @@ import threading
 from fastapi import APIRouter, HTTPException
 
 from ..core.jobs import registry
-from ..core.ssh_client import SSHSession, test_connection
-from ..netdata.parent import forget_node
-from ..netdata.streaming import read_machine_guid
+from ..core.ssh_client import test_connection
 from . import repository, status
 from .maintenance import APT_ACTIONS, run_apt
 from .models import TestSSHRequest, VMCreate, VMUpdate
 from .provisioning import run_provisioning
-from .teardown import teardown_machine
+from .teardown import run_deletion
 from .sync import sync_vm
 from .sysinfo import inspect_vm
 
@@ -102,28 +100,10 @@ def sync(vm_id: str) -> dict:
     return sync_vm(vm)
 
 
-@router.delete("/{vm_id}")
+@router.post("/{vm_id}/delete")
 def delete(vm_id: str) -> dict:
-    vm = repository.get_vm(vm_id)
-    if vm is None:
+    if repository.get_vm(vm_id) is None:
         raise HTTPException(404, "VM introuvable")
-    online = status.ping(vm.static_ip)
-    if online:
-        _teardown_remote(vm)
-    forget_node(vm.netdata_guid or "", vm.name)  # retire le nœud de l'interface du parent.
-    repository.delete_vm(vm_id)
-    state = "en ligne" if online else "hors ligne"
-    return {"ok": True, "was_online": online, "message": f"VM « {vm.name} » ({state}) supprimée"}
-
-
-def _teardown_remote(vm) -> None:
-    """Récupère le GUID s'il manque (pour purger le parent), puis démantèle la
-    machine : désinstalle Netdata, vide le MOTD, remet le réseau en DHCP. La
-    lecture du GUID précède le teardown qui efface /etc/netdata."""
-    try:
-        with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
-            if not vm.netdata_guid:
-                vm.netdata_guid = read_machine_guid(session)
-            teardown_machine(session, vm.vmid)
-    except Exception:  # noqa: BLE001 — best effort, la suppression doit aboutir.
-        pass
+    job = registry.create()
+    threading.Thread(target=run_deletion, args=(job, vm_id), daemon=True).start()
+    return {"job_id": job.id}

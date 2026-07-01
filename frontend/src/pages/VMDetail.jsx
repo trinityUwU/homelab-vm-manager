@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { api, openJobStream } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
 import ProvisionConsole from "../components/ProvisionConsole.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
+import ProgressDialog from "../components/ProgressDialog.jsx";
 import OsLogo from "../components/OsLogo.jsx";
 import { relativeTime } from "../components/relativeTime.js";
 import { IconSync, IconExternal, IconTrash, IconCheck, IconBolt } from "../components/icons.jsx";
@@ -18,6 +20,10 @@ export default function VMDetail() {
   const [busy, setBusy] = useState(false);
   const [apt, setApt] = useState({ running: false, action: null, lines: [], progress: 0 });
   const [inspecting, setInspecting] = useState(false);
+  const [confirmUpgrade, setConfirmUpgrade] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false, phase: "confirm", progress: 0, message: "", success: false,
+  });
 
   // Affiche d'abord les valeurs en cache, puis rafraîchit les infos système en SSH.
   useEffect(() => {
@@ -34,9 +40,13 @@ export default function VMDetail() {
     try { setVm(await api.inspectVm(id)); } finally { setInspecting(false); }
   }
 
-  async function runApt(action) {
+  function runApt(action) {
     if (apt.running) return;
-    if (action === "upgrade" && !confirm("Appliquer toutes les mises à jour sur cette machine ? Les paquets seront mis à niveau.")) return;
+    if (action === "upgrade") { setConfirmUpgrade(true); return; }
+    startApt(action);
+  }
+
+  async function startApt(action) {
     setApt({ running: true, action, lines: [], progress: 0.05 });
     try {
       const { job_id } = await api.runApt(id, action);
@@ -83,11 +93,39 @@ export default function VMDetail() {
     setBusy(false);
   }
 
-  async function remove() {
-    if (!confirm(`Supprimer « ${vm.name} » ? Cette action est définitive.`)) return;
-    const r = await api.deleteVm(id);
-    alert(r.message);
-    navigate("/");
+  function openDeleteDialog() {
+    setDeleteDialog({ open: true, phase: "confirm", progress: 0, message: "", success: false });
+  }
+
+  async function confirmDelete() {
+    setDeleteDialog((d) => ({ ...d, phase: "running", progress: 0.05, message: "Démarrage…" }));
+    try {
+      const { job_id } = await api.deleteVm(id);
+      const es = openJobStream(job_id, (ev) => onDeleteEvent(ev, es));
+    } catch (e) {
+      setDeleteDialog((d) => ({ ...d, phase: "done", success: false, message: `Erreur : ${e.message}` }));
+    }
+  }
+
+  function onDeleteEvent(ev, stream) {
+    setDeleteDialog((d) => {
+      const next = { ...d };
+      if (ev.progress != null) next.progress = ev.progress;
+      if (ev.type === "step" || ev.type === "log") next.message = ev.message;
+      if (ev.type === "result") {
+        next.phase = "done";
+        next.success = ev.success;
+        next.message = ev.message;
+        stream.close();
+      }
+      return next;
+    });
+  }
+
+  function closeDeleteDialog() {
+    const wasSuccess = deleteDialog.success;
+    setDeleteDialog({ open: false, phase: "confirm", progress: 0, message: "", success: false });
+    if (wasSuccess) navigate("/");
   }
 
   return (
@@ -192,8 +230,37 @@ export default function VMDetail() {
       <motion.div className="panel" variants={riseItem}>
         <div className="panel-head"><h2>Suppression</h2></div>
         <p className="hint">Désactive le streaming Netdata si la VM est joignable, puis la retire. Une VM éteinte n'est jamais supprimée automatiquement.</p>
-        <button className="btn btn-danger" onClick={remove}><IconTrash /> Supprimer cette VM</button>
+        <button className="btn btn-danger" onClick={openDeleteDialog}><IconTrash /> Supprimer cette VM</button>
       </motion.div>
+
+      <ConfirmDialog
+        open={confirmUpgrade}
+        title="Appliquer les mises à jour ?"
+        message="Les paquets seront mis à niveau sur cette machine."
+        confirmLabel="Mettre à jour"
+        onConfirm={() => { setConfirmUpgrade(false); startApt("upgrade"); }}
+        onCancel={() => setConfirmUpgrade(false)}
+      />
+
+      <ConfirmDialog
+        open={deleteDialog.open && deleteDialog.phase === "confirm"}
+        title="Supprimer cette VM ?"
+        message={`« ${vm.name} » sera démantelée (Netdata, MOTD, retour DHCP) puis retirée définitivement. Cette action est irréversible.`}
+        confirmLabel="Supprimer"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteDialog((d) => ({ ...d, open: false }))}
+      />
+
+      <ProgressDialog
+        open={deleteDialog.open && deleteDialog.phase !== "confirm"}
+        title={`Suppression de « ${vm.name} »`}
+        progress={deleteDialog.progress}
+        message={deleteDialog.message}
+        done={deleteDialog.phase === "done"}
+        success={deleteDialog.success}
+        onClose={closeDeleteDialog}
+      />
     </motion.div>
   );
 }

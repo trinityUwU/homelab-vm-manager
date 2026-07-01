@@ -1,5 +1,25 @@
 # STATE — HomeLab VM Manager
 
+## Session du 2026-07-01 (suite) — validation terrain + pop-up custom
+
+Alex a validé en conditions réelles le flux `pct set net0` du pivot LXC :
+provisioning, reboot, IP statique qui tient, teardown -> retour DHCP propre.
+Netdata (install + désinstall) confirmé OK aussi.
+
+Remplacement des `confirm()`/`alert()` natifs du navigateur par des modales
+custom (`components/ConfirmDialog.jsx`, `components/ProgressDialog.jsx`),
+cohérentes avec le design system (dark, tokens `--bg-elevated`/`--r-lg`).
+Utilisées pour : confirmation avant upgrade paquets, confirmation +
+progression de la suppression d'une VM.
+
+**Suppression passée en job SSE** (`teardown.run_deletion`, comme le
+provisioning) au lieu d'un `DELETE` synchrone bloquant : le clic "Supprimer"
+ouvrait une requête qui pouvait prendre plusieurs secondes sans aucun retour
+visuel avant l'`alert()` final. Désormais `POST /api/vms/{id}/delete` renvoie
+un `job_id`, et la modale affiche une vraie barre de progression + le libellé
+de l'étape en cours (connexion, désinstall Netdata, purge MOTD, retour DHCP,
+retrait du nœud parent, suppression de l'enregistrement) via SSE.
+
 ## Session du 2026-07-01 — pivot LXC (le parc réel n'est pas du QEMU Debian pur)
 
 Test terrain en direct (Alex, Proxmox réel) : l'IP statique repartait en DHCP au
