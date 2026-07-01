@@ -55,6 +55,11 @@ def harden_static_persistence(session: SSHSession, iface: str) -> None:
     reprennent la main au boot et écraseraient /etc/network/interfaces.
     Best effort multi-cause (cloud-init, NetworkManager, interfaces.d résiduel)."""
     script = (
+        # ifupdown parfois réduit aux conffiles sur les images cloud Debian
+        # (dpkg "conf-files only") : le réinstaller garantit /etc/init.d et
+        # networking.service réellement présents pour lire /etc/network/interfaces.
+        'command -v apt-get >/dev/null 2>&1 '
+        '&& DEBIAN_FRONTEND=noninteractive apt-get install -y ifupdown >/dev/null 2>&1; '
         # cloud-init : désactive sa génération réseau + purge ses fichiers.
         'if command -v cloud-init >/dev/null 2>&1; then '
         'mkdir -p /etc/cloud/cloud.cfg.d; '
@@ -71,9 +76,13 @@ def harden_static_persistence(session: SSHSession, iface: str) -> None:
         f'printf "[keyfile]\\nunmanaged-devices=interface-name:{iface}\\n" '
         '> /etc/NetworkManager/conf.d/99-homelab-unmanaged.conf; '
         'nmcli connection reload 2>/dev/null || true; fi; '
-        # systemd-networkd actif : masque (ifupdown est notre source de vérité).
-        'systemctl is-enabled --quiet systemd-networkd 2>/dev/null '
-        '&& systemctl disable --now systemd-networkd 2>/dev/null || true'
+        # systemd-networkd présent : coupé + masqué sans condition (ifupdown
+        # est notre source de vérité). L'ancien garde-fou "is-enabled &&" ne
+        # déclenchait jamais le disable quand l'unit était active hors symlink
+        # standard (cas des images cloud Debian) : DHCP revenait au reboot.
+        'systemctl disable --now systemd-networkd systemd-networkd-wait-online '
+        '2>/dev/null; '
+        'systemctl mask systemd-networkd systemd-networkd-wait-online 2>/dev/null || true'
     )
     session.run(script, sudo=True)
 
