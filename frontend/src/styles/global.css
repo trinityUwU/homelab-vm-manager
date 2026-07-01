@@ -283,6 +283,11 @@ select option { background: var(--bg-elevated); color: var(--text-primary); }
 .type-opt.on-essentielle { border-color: rgba(240, 160, 48, 0.5); }
 .type-opt.on-essentielle::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120px 80px at 16% 0%, rgba(240, 160, 48, 0.12), transparent 70%); }
 
+/* Variante générique à N options, accent passé en CSS var (MachineTypeSelector) */
+.type-toggle-3 { grid-template-columns: repeat(3, 1fr); }
+.type-opt.on-accent { border-color: color-mix(in srgb, var(--opt-accent) 55%, transparent); }
+.type-opt.on-accent::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120px 80px at 16% 0%, color-mix(in srgb, var(--opt-accent) 14%, transparent), transparent 70%); }
+
 /* ---------- Terminal / provisioning ---------- */
 .progress-track { height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; overflow: hidden; margin: 16px 0; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, var(--standard), #7db8ff); border-radius: 6px; }

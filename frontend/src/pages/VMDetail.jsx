@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { api, openJobStream } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
+import MachineTypeSelector from "../components/MachineTypeSelector.jsx";
 import ProvisionConsole from "../components/ProvisionConsole.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import ProgressDialog from "../components/ProgressDialog.jsx";
@@ -78,7 +79,8 @@ export default function VMDetail() {
     setBusy(true); setMsg(null);
     try {
       await api.updateVm(id, {
-        name: vm.name, vmid: Number(vm.vmid), static_ip: vm.static_ip, ports: vm.ports,
+        name: vm.name, machine_type: vm.machine_type, vmid: vm.vmid ? Number(vm.vmid) : null,
+        static_ip: vm.static_ip, ports: vm.ports,
         vm_type: vm.vm_type, ssh_user: vm.ssh_user, ssh_password: vm.ssh_password,
       });
       setMsg({ ok: true, text: "Modifications enregistrées" });
@@ -172,9 +174,14 @@ export default function VMDetail() {
 
       <motion.div className="panel" variants={riseItem}>
         <div className="panel-head"><h2>Configuration</h2></div>
+        <div className="field" style={{ marginBottom: 16 }}><label>Type de machine</label>
+          <MachineTypeSelector value={vm.machine_type} onChange={(v) => set("machine_type", v)} /></div>
         <div className="grid-2">
           <div className="field"><label>Nom</label><input value={vm.name} onChange={(e) => set("name", e.target.value)} /></div>
-          <div className="field"><label>VMID (conteneur LXC Proxmox)</label><input className="mono-input" type="number" value={vm.vmid} onChange={(e) => set("vmid", e.target.value)} /></div>
+          {vm.machine_type !== "qemu" && (
+            <div className="field"><label>VMID Proxmox {vm.machine_type === "lxc" ? "(requis)" : "(optionnel — utile si LXC)"}</label>
+              <input className="mono-input" type="number" value={vm.vmid ?? ""} onChange={(e) => set("vmid", e.target.value)} /></div>
+          )}
           <div className="field"><label>IP statique</label><input className="mono-input" value={vm.static_ip} onChange={(e) => set("static_ip", e.target.value)} /></div>
           <div className="field"><label>Ports</label><input className="mono-input" value={vm.ports} onChange={(e) => set("ports", e.target.value)} /></div>
           <div className="field"><label>Utilisateur SSH</label><input className="mono-input" value={vm.ssh_user} onChange={(e) => set("ssh_user", e.target.value)} /></div>

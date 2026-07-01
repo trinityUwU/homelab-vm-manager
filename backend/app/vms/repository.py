@@ -4,6 +4,8 @@ Les mots de passe transitent par le module secrets à l'entrée/sortie du disque
 """
 import uuid
 
+from pydantic import ValidationError
+
 from ..core import secrets, store
 from .models import VM, VMCreate, VMUpdate, now_iso
 
@@ -40,12 +42,19 @@ def create_vm(payload: VMCreate) -> VM:
 
 
 def update_vm(vm_id: str, patch: VMUpdate) -> VM | None:
+    """Applique le patch puis revalide le résultat fusionné (`model_copy` seul ne
+    re-déclenche pas les validators — un vmid manquant sur un passage en LXC
+    doit être rejeté ici, pas découvert au prochain chargement de la VM)."""
     rows = store.read_vms()
     for index, data in enumerate(rows):
         if data.get("id") == vm_id:
             current = _from_storage(data)
             changes = patch.model_dump(exclude_unset=True)
-            updated = current.model_copy(update=changes)
+            merged = current.model_copy(update=changes)
+            try:
+                updated = VM(**merged.model_dump())
+            except ValidationError as exc:
+                raise ValueError(str(exc)) from exc
             rows[index] = _to_storage(updated)
             store.write_vms(rows)
             return updated

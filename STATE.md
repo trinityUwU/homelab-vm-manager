@@ -1,5 +1,43 @@
 # STATE — HomeLab VM Manager
 
+## Session du 2026-07-01 (suite 2) — retour du support QEMU en parallèle du LXC
+
+Revirement sur la décision de scope du matin même : Chris redemande finalement
+de gérer les deux types de machine (le parc réel n'est pas *que* du LXC), avec
+un sélecteur explicite à l'ajout plutôt qu'un abandon d'un des deux chemins.
+
+**Modèle** : `MachineType` (`qemu` / `lxc` / `auto`) sur chaque VM. `auto`
+n'existe qu'à la création — résolu en `qemu`/`lxc` dès la première connexion
+du provisioning (signature d'interface invité : `eth0@ifNN` = paire veth = LXC,
+sinon QEMU) puis persisté ; ne réapparaît jamais après. `vmid` redevient
+optionnel dans le modèle, mais un `model_validator` Pydantic rejette toute VM
+`machine_type=lxc` sans `vmid` (à la création **et** à la mise à jour — un
+`model_copy` seul ne re-déclenche pas les validators, `repository.update_vm`
+revalide explicitement le résultat fusionné).
+
+**Deux chemins réseau, choisis par `machine_type` dans provisioning/sync/teardown** :
+- **LXC** : inchangé depuis le pivot du matin — `net0` côté hôte Proxmox
+  (`proxmox_host.py`, `pct set`), VMID requis.
+- **QEMU** : chemin **restauré depuis l'historique git** (commit `039d234`,
+  avant le pivot) — bascule IP statique côté invité (`/etc/network/interfaces`,
+  durcissement cloud-init/NetworkManager/systemd-networkd), aucun VMID ni accès
+  à l'hôte Proxmox nécessaire. Fonctions renommées publiques dans `network.py`
+  (`restart_networking`, `write_resolv_conf`, avant préfixées `_`) pour être
+  réutilisées proprement depuis `sync.py`.
+- **Auto** : détection au premier provisioning uniquement. Si LXC détecté sans
+  VMID, le provisioning s'arrête avec un message explicite (pas de blocage
+  silencieux, pas de crash sur `pct` avec un VMID absent).
+
+Frontend : `MachineTypeSelector.jsx` (3 options, style générique à accent CSS var
+`--opt-accent`, réutilise le shell visuel de `TypeSelector` sans le coupler à
+ses couleurs figées standard/essentielle). Champ VMID conditionnel dans
+`AddVM.jsx`/`VMDetail.jsx` : requis si LXC, optionnel-conseillé si Auto, masqué
+si QEMU.
+
+**Non validé sur le terrain** : le chemin QEMU restauré n'a été rejoué que par
+lecture de code (git history + tests unitaires de validation Pydantic), pas
+sur une vraie VM Debian pure. Le mode Auto non plus. Voir `TODO.md`.
+
 ## Session du 2026-07-01 (suite) — validation terrain + pop-up custom
 
 Alex a validé en conditions réelles le flux `pct set net0` du pivot LXC :

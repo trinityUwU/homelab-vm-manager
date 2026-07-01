@@ -3,11 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { api, openJobStream } from "../api/client.js";
 import TypeSelector from "../components/TypeSelector.jsx";
+import MachineTypeSelector from "../components/MachineTypeSelector.jsx";
 import ProvisionConsole from "../components/ProvisionConsole.jsx";
 import { IconBolt, IconCheck } from "../components/icons.jsx";
 import { riseItem, EASE } from "../components/motion.js";
 
-const EMPTY = { name: "", vmid: "", dhcp_ip: "", static_ip: "", ports: "", vm_type: "standard", ssh_user: "", ssh_password: "" };
+const EMPTY = {
+  name: "", machine_type: "lxc", vmid: "", dhcp_ip: "", static_ip: "",
+  ports: "", vm_type: "standard", ssh_user: "", ssh_password: "",
+};
 
 export default function AddVM() {
   const [form, setForm] = useState(EMPTY);
@@ -46,7 +50,7 @@ export default function AddVM() {
     setLines([]);
     setProgress(0);
     try {
-      const vm = await api.createVm({ ...form, vmid: Number(form.vmid) });
+      const vm = await api.createVm({ ...form, vmid: form.vmid ? Number(form.vmid) : null });
       const { job_id } = await api.provision(vm.id);
       const es = openJobStream(job_id, (ev) => handleEvent(ev, es, vm.id));
     } catch (e) {
@@ -77,11 +81,16 @@ export default function AddVM() {
       </div>
 
       <motion.div className="panel" variants={riseItem} initial="hidden" animate="show">
-        <div className="grid-2">
+        <div className="field" style={{ marginTop: 4 }}><label>Type de machine</label>
+          <MachineTypeSelector value={form.machine_type} onChange={(v) => set("machine_type", v)} /></div>
+
+        <div className="grid-2" style={{ marginTop: 16 }}>
           <div className="field"><label>Nom de la VM</label>
             <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="ex : web-01" /></div>
-          <div className="field"><label>VMID (conteneur LXC Proxmox)</label>
-            <input className="mono-input" type="number" value={form.vmid} onChange={(e) => set("vmid", e.target.value)} placeholder="101" /></div>
+          {form.machine_type !== "qemu" && (
+            <div className="field"><label>VMID Proxmox {form.machine_type === "lxc" ? "(requis)" : "(optionnel — utile si LXC)"}</label>
+              <input className="mono-input" type="number" value={form.vmid} onChange={(e) => set("vmid", e.target.value)} placeholder="101" /></div>
+          )}
           <div className="field"><label>Ports utilisés (optionnel — ex 22;80;5000)</label>
             <input className="mono-input" value={form.ports} onChange={(e) => set("ports", e.target.value)} placeholder="22;80;5000" /></div>
           <div className="field"><label>IP DHCP actuelle (vide si déjà en statique)</label>
@@ -107,7 +116,11 @@ export default function AddVM() {
           <button className="btn btn-ghost" onClick={testSsh} disabled={!canTest || provisioning}>
             {sshOk ? <IconCheck /> : null} Tester la connexion SSH
           </button>
-          <button className="btn btn-primary" onClick={provision} disabled={!sshOk || !form.name || !form.vmid || !form.static_ip || provisioning}>
+          <button
+            className="btn btn-primary"
+            onClick={provision}
+            disabled={!sshOk || !form.name || !form.static_ip || (form.machine_type === "lxc" && !form.vmid) || provisioning}
+          >
             <IconBolt /> {provisioning ? "Provisioning…" : "Provisionner"}
           </button>
         </div>

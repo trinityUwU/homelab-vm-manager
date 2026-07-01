@@ -35,11 +35,13 @@ le produit fait : gérer des VMs, leur réseau, leur monitoring, leur MOTD.
   chaque écriture est rediffusée sur le bus pour le temps réel.
 - **proxmox_host** (`vms/proxmox_host.py`) : seul module qui parle à l'**hôte** Proxmox
   (SSH root, distinct des creds de chaque conteneur) pour lire/écrire `net0` via `pct`.
-  Source de vérité pour l'IP statique d'un LXC — l'invité ne peut pas la faire tenir seul,
-  Proxmox réinjecte sa config réseau à chaque démarrage du conteneur.
-- **network** (`vms/network.py`) : utilitaires **invité, lecture seule** (détection
-  d'interface pour `sysinfo`, attente de reconnexion) — ne touche plus à la config
-  réseau elle-même depuis le passage au tout-LXC.
+  Source de vérité pour l'IP statique d'un **LXC** — l'invité ne peut pas la faire
+  tenir seul, Proxmox réinjecte sa config réseau à chaque démarrage du conteneur.
+- **network** (`vms/network.py`) : détection (interface, type de machine) + bascule
+  IP statique **côté invité**, pour une **VM QEMU** pure (`/etc/network/interfaces`,
+  seule config qui tient dans ce cas — pas de net0 à réinjecter). `machine_type` sur
+  la VM (`MachineType` dans `models.py`) décide lequel des deux chemins (`network` ou
+  `proxmox_host`) provisioning/sync/teardown empruntent.
 
 ## Règles de frontière entre modules
 
@@ -70,3 +72,8 @@ backend et le WebSocket de logs).
   Le frontend (`LiveProvider`) rafraîchit les pages et déclenche les toasts en direct.
 - **Resync auto** : modifier le MOTD / nom / ligne du lab déclenche, via `vms/auto_sync`,
   une resync en arrière-plan des VMs concernées (raison « modification config »), si activé.
+- **Résolution du type de machine** : `machine_type` vaut `qemu`/`lxc` (choisi à
+  l'ajout) ou `auto` (résolu à la 1re connexion, via la signature d'interface —
+  `eth0@ifNN` = veth = LXC). Une fois résolu, la valeur est persistée sur la VM :
+  `auto` ne survit jamais au premier provisioning. Un LXC détecté sans VMID stoppe
+  le provisioning avec un message clair plutôt que d'échouer plus loin sur `pct`.

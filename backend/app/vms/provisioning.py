@@ -1,8 +1,9 @@
 """Orchestration du provisioning d'une VM, étape par étape, avec logs live.
 
-Ordre imposé : bascule net0 statique côté hôte Proxmox -> attente nouvelle IP ->
-connexion -> install Netdata -> streaming -> MOTD. Si dhcp_ip est vide, la VM
-est déjà en statique : on saute l'étape réseau.
+Ordre imposé : résolution du type de machine -> bascule réseau statique (net0
+côté hôte Proxmox pour un LXC, invité pour une VM QEMU) -> attente nouvelle IP
+-> connexion -> install Netdata -> streaming -> MOTD. Si dhcp_ip est vide, la
+VM est déjà en statique : on saute l'étape réseau.
 """
 from loguru import logger
 
@@ -19,8 +20,8 @@ from ..netdata.streaming import (
     read_machine_guid,
     set_display_hostname,
 )
-from . import proxmox_host
-from .models import VM
+from . import network, proxmox_host
+from .models import MachineType, VM
 from .network import gateway_from_ip, wait_for_host
 from .repository import mark_provisioned, save_vm
 
@@ -29,12 +30,31 @@ def _settings_or_raise() -> dict:
     settings = store.read_settings()
     if not settings.get("netdata_api_key"):
         raise SSHError("clé API Netdata absente — renseigne-la dans les Paramètres")
-    if not settings.get("proxmox_host"):
-        raise SSHError("hôte Proxmox absent — renseigne-le dans les Paramètres")
     return settings
 
 
-def _switch_network(job: Job, vm: VM, settings: dict) -> SSHSession:
+def _resolve_machine_type(job: Job, vm: VM) -> MachineType:
+    """Si machine_type=auto, détecte qemu/lxc via une connexion invité et
+    persiste le résultat (l'« auto » n'existe qu'au moment de la création,
+    plus jamais ensuite). Un LXC détecté sans VMID bloque net : `pct set`
+    ne peut pas cibler un conteneur inconnu."""
+    if vm.machine_type != MachineType.AUTO:
+        return vm.machine_type
+    host = vm.dhcp_ip or vm.static_ip
+    job.emit("step", f"Détection du type de machine sur {host}…", 0.08, "detect")
+    with SSHSession(host, vm.ssh_user, vm.ssh_password) as session:
+        detected = MachineType(network.detect_machine_type(session))
+    vm.machine_type = detected
+    save_vm(vm)
+    job.emit("log", f"Type détecté : {detected.value.upper()}", 0.09, "detect")
+    if detected == MachineType.LXC and vm.vmid is None:
+        raise SSHError("conteneur LXC détecté — renseigne son VMID sur la fiche puis relance le provisioning")
+    return detected
+
+
+def _switch_network_lxc(job: Job, vm: VM, settings: dict) -> SSHSession:
+    if not settings.get("proxmox_host"):
+        raise SSHError("hôte Proxmox absent — renseigne-le dans les Paramètres")
     job.emit("step", "Bascule en IP statique (net0, hôte Proxmox)…", 0.15, "network")
     gateway = gateway_from_ip(vm.static_ip)
     with SSHSession(
@@ -50,11 +70,33 @@ def _switch_network(job: Job, vm: VM, settings: dict) -> SSHSession:
     return session
 
 
+def _switch_network_qemu(job: Job, vm: VM) -> SSHSession:
+    job.emit("step", f"Connexion SSH sur l'IP DHCP {vm.dhcp_ip}…", 0.15, "ssh_dhcp")
+    with SSHSession(vm.dhcp_ip, vm.ssh_user, vm.ssh_password) as dhcp:
+        job.emit("step", "Bascule en IP statique (invité)…", 0.25, "network")
+        iface = network.apply_static_ip(dhcp, vm.static_ip)
+    job.emit("log", f"Interface réseau détectée : {iface}", 0.28, "network")
+    job.emit("step", f"Attente de la VM sur {vm.static_ip} (le réseau coupe)…", 0.35, "wait")
+    wait_for_host(vm.static_ip, vm.ssh_user, vm.ssh_password)
+    job.emit("step", f"Reconnexion sur {vm.static_ip}…", 0.45, "reconnect")
+    session = SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password)
+    session.connect()
+    return session
+
+
 def _connect_static(job: Job, vm: VM) -> SSHSession:
     job.emit("step", f"VM déjà en statique — connexion sur {vm.static_ip}…", 0.40, "ssh_static")
     session = SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password)
     session.connect()
     return session
+
+
+def _switch_network(job: Job, vm: VM, machine_type: MachineType, settings: dict) -> SSHSession:
+    if not vm.dhcp_ip:
+        return _connect_static(job, vm)
+    if machine_type == MachineType.LXC:
+        return _switch_network_lxc(job, vm, settings)
+    return _switch_network_qemu(job, vm)
 
 
 def _install_monitoring(job: Job, session: SSHSession, vm: VM, settings: dict) -> None:
@@ -92,7 +134,8 @@ def run_provisioning(job: Job, vm_id: str) -> None:
         job.emit("step", f"Provisioning de « {vm.name} »", 0.05, "start")
         if ensure_parent_accepts(settings["netdata_api_key"]):
             job.emit("log", "Clé API déclarée côté host Netdata (parent)", 0.07, "parent")
-        session = _switch_network(job, vm, settings) if vm.dhcp_ip else _connect_static(job, vm)
+        machine_type = _resolve_machine_type(job, vm)
+        session = _switch_network(job, vm, machine_type, settings)
         _install_monitoring(job, session, vm, settings)
         _apply_motd(job, session, vm, settings)
         vm.last_seen_online = True

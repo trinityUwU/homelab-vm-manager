@@ -2,7 +2,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class VMType(str, Enum):
@@ -10,14 +10,27 @@ class VMType(str, Enum):
     ESSENTIELLE = "essentielle"  # MAJ notifiées seulement, jamais appliquées.
 
 
+class MachineType(str, Enum):
+    QEMU = "qemu"  # VM Debian pure : IP statique posée côté invité (/etc/network/interfaces).
+    LXC = "lxc"    # Conteneur Proxmox : IP statique posée côté hôte (net0, pct set).
+    AUTO = "auto"  # Choix à la création seulement ; résolu en qemu/lxc dès la 1re connexion.
+
+
 class VMBase(BaseModel):
     name: str
-    vmid: int                  # ID du conteneur LXC côté Proxmox (pct config <vmid>).
+    machine_type: MachineType = MachineType.LXC
+    vmid: int | None = None    # ID Proxmox (pct/qm config <vmid>) — requis si machine_type=lxc.
     static_ip: str
     ports: str = ""            # Champ libre, ex "22;80;5000". Modifiable après coup.
     vm_type: VMType = VMType.STANDARD
     ssh_user: str
     ssh_password: str
+
+    @model_validator(mode="after")
+    def _vmid_required_for_lxc(self) -> "VMBase":
+        if self.machine_type == MachineType.LXC and self.vmid is None:
+            raise ValueError("vmid requis quand machine_type=lxc")
+        return self
 
 
 class VMCreate(VMBase):
@@ -27,6 +40,7 @@ class VMCreate(VMBase):
 
 class VMUpdate(BaseModel):
     name: str | None = None
+    machine_type: MachineType | None = None
     vmid: int | None = None
     static_ip: str | None = None
     ports: str | None = None

@@ -48,7 +48,10 @@ def get_one(vm_id: str) -> dict:
 
 @router.put("/{vm_id}")
 def update(vm_id: str, patch: VMUpdate) -> dict:
-    vm = repository.update_vm(vm_id, patch)
+    try:
+        vm = repository.update_vm(vm_id, patch)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if vm is None:
         raise HTTPException(404, "VM introuvable")
     return vm.model_dump()

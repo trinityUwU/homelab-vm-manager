@@ -1,6 +1,6 @@
 """Démantèlement d'une machine retirée du lab : annule tout ce que le
-provisioning a posé côté cible (Netdata, MOTD) et remet net0 en DHCP côté
-hôte Proxmox — c'est lui la source de vérité réseau pour un LXC, pas l'invité.
+provisioning a posé côté cible (Netdata, MOTD) et remet le réseau en DHCP —
+côté hôte Proxmox (net0, `pct set`) pour un LXC, côté invité pour une VM QEMU.
 
 Best effort par couche : une étape qui échoue ne bloque pas les suivantes,
 la suppression côté app doit toujours aboutir.
@@ -13,7 +13,8 @@ from ..core.ssh_client import SSHSession
 from ..motd.apply import MOTD_PATH
 from ..netdata.parent import forget_node
 from ..netdata.streaming import read_machine_guid
-from . import proxmox_host, status
+from . import network, proxmox_host, status
+from .models import MachineType
 
 
 def uninstall_netdata(session: SSHSession) -> None:
@@ -37,8 +38,9 @@ def clear_motd(session: SSHSession) -> None:
 
 
 def _teardown_guest(job: Job, vm) -> None:
-    """Netdata + MOTD côté invité. Best effort : la suppression doit aboutir
-    même si la machine coupe la connexion en cours de route."""
+    """Netdata + MOTD, puis retour DHCP invité si QEMU (le LXC se traite côté
+    hôte, après coup — voir _restore_host_dhcp). Best effort : la suppression
+    doit aboutir même si la machine coupe la connexion en cours de route."""
     try:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
             if not vm.netdata_guid:
@@ -47,12 +49,16 @@ def _teardown_guest(job: Job, vm) -> None:
             uninstall_netdata(session)
             job.emit("step", "Purge du MOTD…", 0.55, "motd")
             clear_motd(session)
+            if vm.machine_type == MachineType.QEMU:
+                job.emit("step", "Retour en DHCP (invité)…", 0.70, "network")
+                iface = network.detect_interface(session)
+                network.restore_dhcp(session, iface)
     except Exception as exc:  # noqa: BLE001 — best effort, la suppression doit aboutir.
         logger.warning(f"teardown invité échoué : {exc}")
 
 
 def _restore_host_dhcp(vmid: int) -> None:
-    """Repasse net0 en DHCP côté hôte Proxmox. Best effort, même logique."""
+    """Repasse net0 en DHCP côté hôte Proxmox (LXC uniquement). Best effort."""
     try:
         settings = store.read_settings()
         with SSHSession(
@@ -78,8 +84,9 @@ def run_deletion(job: Job, vm_id: str) -> None:
     if online:
         job.emit("step", f"Connexion à {vm.static_ip}…", 0.15, "connect")
         _teardown_guest(job, vm)
-        job.emit("step", "Retour en DHCP (net0, hôte Proxmox)…", 0.70, "network")
-        _restore_host_dhcp(vm.vmid)
+        if vm.machine_type == MachineType.LXC:
+            job.emit("step", "Retour en DHCP (net0, hôte Proxmox)…", 0.75, "network")
+            _restore_host_dhcp(vm.vmid)
     else:
         job.emit("log", "Machine hors ligne — étapes distantes ignorées", 0.5, "offline")
 

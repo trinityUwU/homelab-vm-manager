@@ -25,14 +25,14 @@ homelab-vm-manager/
 │       │   ├── ssh_client.py     Session SSH Paramiko (run + exec_stream live), test de connexion
 │       │   └── jobs.py           Registre de jobs + files d'événements pour logs live
 │       ├── vms/                  Domaine VM (cœur métier)
-│       │   ├── models.py         Schémas Pydantic VM (config, infos système), helpers ports/date
-│       │   ├── repository.py     CRUD JSON des VMs (via secrets)
+│       │   ├── models.py         Schémas Pydantic VM (MachineType qemu/lxc/auto), helpers ports/date
+│       │   ├── repository.py     CRUD JSON des VMs (via secrets), revalide le patch fusionné (vmid/lxc)
 │       │   ├── routes.py         Endpoints HTTP du domaine VM (CRUD, sync, inspect, apt, provision)
-│       │   ├── provisioning.py   Flux de provisioning étape par étape (live)
+│       │   ├── provisioning.py   Flux de provisioning étape par étape (live), branché qemu/lxc + résolution auto
 │       │   ├── proxmox_host.py   IP statique LXC via net0/pct set côté hôte Proxmox (source de vérité réseau)
-│       │   ├── network.py        Utilitaires invité lecture seule (détection interface, attente reconnexion)
-│       │   ├── teardown.py       Démantèlement à la suppression (en job, étapes live) : Netdata + MOTD + net0 DHCP
-│       │   ├── sync.py           Vérifier & Synchroniser (idempotent : IP/MOTD/Netdata) + journalise
+│       │   ├── network.py        Détection (interface, type qemu/lxc) + IP statique invité pour VM QEMU pure
+│       │   ├── teardown.py       Démantèlement à la suppression (en job, étapes live) : Netdata + MOTD + DHCP (qemu/lxc)
+│       │   ├── sync.py           Vérifier & Synchroniser (idempotent : IP qemu/lxc, MOTD, Netdata) + journalise
 │       │   ├── sysinfo.py        Collecte SSH lecture seule : OS, noyau, archi, interface, IP
 │       │   ├── package_manager.py Abstraction multi-OS (apt/dnf/pacman/zypper/apk) détectée en live
 │       │   ├── updates.py        Comptage/application des MAJ, délègue au package_manager
@@ -73,6 +73,7 @@ homelab-vm-manager/
         │   ├── OsLogo.jsx        Logo OS réel (simple-icons, bundlé local, repli Tux)
         │   ├── relativeTime.js   Horodatage ISO -> « il y a 3 min »
         │   ├── TypeSelector.jsx  Sélecteur Standard/Essentielle visuel + hover lift
+        │   ├── MachineTypeSelector.jsx  Sélecteur LXC/QEMU/Auto (détermine la bascule IP statique)
         │   ├── ProvisionConsole.jsx  Terminal live + barre de progression animée
         │   ├── ConfirmDialog.jsx Confirmation custom (remplace window.confirm natif)
         │   ├── ProgressDialog.jsx Modale de progression live sur job SSE (ex: suppression)
