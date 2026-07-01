@@ -39,7 +39,7 @@ homelab-vm-manager/
 │       │   ├── maintenance.py    Actions paquets à la demande, sortie live + état en cours->fini
 │       │   ├── auto_sync.py      Resync auto des VMs sur modification d'un paramètre resyncable
 │       │   ├── updates_routes.py Endpoints page Mises à jour (aperçu, machines, run-now)
-│       │   └── status.py         Ping ICMP et rafraîchissement online/offline
+│       │   └── status.py         Ping ICMP (concurrent) + heartbeat online/offline, diffuse sur le bus si transition
 │       ├── history/              Journal d'événements (scans, resync) avec cycle de vie
 │       │   ├── models.py         HistoryEvent : kind, reason, mode, status (running->final)
 │       │   ├── repository.py     record / update_event (rediffusé sur le bus) / list filtrée
@@ -54,7 +54,8 @@ homelab-vm-manager/
 │       ├── settings/
 │       │   └── routes.py         Endpoints paramètres globaux (réarme scheduler, déclenche resync)
 │       └── schedule/
-│           └── daily.py          Scheduler APScheduler (scan quotidien, journalisé en cours->fini)
+│           ├── daily.py          Scheduler APScheduler (scan quotidien, journalisé en cours->fini)
+│           └── liveness.py       Scheduler APScheduler (heartbeat 5s, statut online/offline temps réel)
 └── frontend/
     ├── package.json              Dépendances React/Vite (+ simple-icons pour les logos OS)
     ├── vite.config.js            Proxy /api et /ws vers le backend

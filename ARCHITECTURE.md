@@ -14,7 +14,7 @@ le produit fait : gérer des VMs, leur réseau, leur monitoring, leur MOTD.
 | `netdata/` | Tout ce qui touche au monitoring Netdata côté enfant (install, streaming on/off, état). | Ne connaît pas le modèle VM ; reçoit des paramètres bruts. |
 | `motd/` | Template MOTD : rendu des balises, application/lecture sur VM, routes d'édition. | Ne décide pas quand appliquer (c'est provisioning/sync qui appellent). |
 | `settings/` | Paramètres globaux : lecture/écriture + réarmement du scheduler + déclenchement resync auto. | Ne stocke rien d'autre que les settings. |
-| `schedule/` | Planification du scan quotidien (APScheduler). | N'implémente pas la logique de MAJ (délègue à `vms/updates`). |
+| `schedule/` | Planification du scan quotidien **et** du heartbeat online/offline (deux jobs APScheduler distincts). | N'implémente pas la logique de MAJ ni le ping lui-même (délègue à `vms/updates` et `vms/status`). |
 
 ## Définitions non ambiguës (contrat anti-pourrissement)
 
@@ -33,6 +33,11 @@ le produit fait : gérer des VMs, leur réseau, leur monitoring, leur MOTD.
 - **maintenance** : action paquet à la demande avec sortie live (Job/SSE) — exécute, `updates` mesure.
 - **history.record / update_event** : un événement naît « en cours » puis évolue vers son état final ;
   chaque écriture est rediffusée sur le bus pour le temps réel.
+- **status** (`vms/status.py`) : ping ICMP, source unique de vérité pour `last_seen_online`.
+  Deux consommateurs : `refresh_all`/`refresh_vm_status` (déclenchés à la demande par
+  l'UI, toujours persistés) et `check_liveness` (déclenché toutes les 5s par
+  `schedule/liveness.py`, ne persiste et ne diffuse sur le bus **que si l'état a
+  changé** — évite l'écriture disque et le bruit SSE à chaque cycle).
 - **proxmox_host** (`vms/proxmox_host.py`) : seul module qui parle à l'**hôte** Proxmox
   (SSH root, distinct des creds de chaque conteneur) pour lire/écrire `net0` via `pct`.
   Source de vérité pour l'IP statique d'un **LXC** — l'invité ne peut pas la faire
@@ -67,6 +72,11 @@ backend et le WebSocket de logs).
   le frontend lit ces étapes via le flux SSE `/api/jobs/{id}/stream`.
 - **Scan quotidien** : `schedule/daily` ping chaque VM non exclue, applique les MAJ pour
   les Standard, notifie seulement pour les Essentielles. Jamais de suppression auto.
+- **Heartbeat online/offline** : `schedule/liveness` ping **toutes** les VMs en
+  parallèle toutes les 5s (`ThreadPoolExecutor`, indépendant du scan quotidien).
+  Sur un changement d'état (shutdown/reboot détecté), publie un événement
+  `vm_status` sur le bus — le frontend le reçoit via le même flux SSE que
+  l'historique et rafraîchit le Dashboard sans action de l'utilisateur.
 - **Temps réel** : toute opération journalise un événement via `history` ; `core/events`
   (bus en mémoire) le rediffuse aux clients abonnés au flux SSE `/api/history/stream`.
   Le frontend (`LiveProvider`) rafraîchit les pages et déclenche les toasts en direct.

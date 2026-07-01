@@ -11,6 +11,7 @@ from .core import store
 from .history.routes import router as history_router
 from .motd.routes import router as motd_router
 from .schedule.daily import start_scheduler, stop_scheduler
+from .schedule.liveness import start_liveness, stop_liveness
 from .settings.routes import router as settings_router
 from .vms.routes import router as vms_router
 from .vms.updates_routes import router as updates_router
@@ -20,9 +21,11 @@ from .vms.updates_routes import router as updates_router
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     store.read_settings()  # crée settings.json au premier lancement.
     start_scheduler()
+    start_liveness()
     logger.info("HomeLab VM Manager démarré")
     yield
     stop_scheduler()
+    stop_liveness()
 
 
 app = FastAPI(title="HomeLab VM Manager", lifespan=lifespan)

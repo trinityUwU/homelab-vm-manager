@@ -2,7 +2,8 @@
 
 À l'heure configurée : ping chaque VM. Éteinte -> rien. Allumée + Standard ->
 applique les MAJ. Allumée + Essentielle -> notifie seulement (compte les MAJ).
-Ne supprime jamais une VM pour inactivité.
+Ne supprime jamais une VM pour inactivité. Le statut online/offline temps réel
+(indépendant de ce scan) est géré par `liveness.py`.
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from loguru import logger

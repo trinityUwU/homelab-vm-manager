@@ -32,6 +32,12 @@
       l'ajout (LXC/QEMU/Auto), VMID requis seulement si LXC, chemin réseau
       invité restauré depuis l'historique git pour QEMU, détection auto par
       signature d'interface (`eth0@ifNN` = LXC) si mode Auto choisi.
+- [x] **Heartbeat online/offline temps réel** : nouveau scheduler dédié
+      (`schedule/liveness.py`, APScheduler, interval 5s) ping toutes les VMs
+      en parallèle (`vms/status.check_liveness`), ne persiste/diffuse que les
+      transitions d'état sur le bus d'événements existant. Le Dashboard se
+      met à jour tout seul (shutdown/reboot détecté en quelques secondes) sans
+      clic « Actualiser » — corrige le décalage remonté par Alex.
 
 ## À valider sur le terrain (priorité)
 - [ ] **Chemin QEMU restauré** : provisioning + reboot + teardown sur une vraie
@@ -40,6 +46,10 @@
 - [ ] **Mode Auto** : ajouter une machine sans préciser son type, vérifier que
       la détection au provisioning tombe juste (LXC vs QEMU) et que le blocage
       "VMID manquant" s'affiche clairement si un LXC est détecté sans VMID.
+- [ ] **Heartbeat** : shutdown puis boot d'une VM réelle, vérifier que le
+      Dashboard bascule online/offline en quelques secondes sans rechargement
+      manuel (validé par lecture de code + test unitaire, pas encore rejoué
+      sur le parc réel).
 - [ ] Changer le `machine_type` d'une VM déjà provisionnée depuis sa fiche puis
       relancer une synchro : vérifier qu'elle bascule proprement sur le nouveau
       chemin réseau (cas non testé, usage attendu rare).

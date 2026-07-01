@@ -1,5 +1,34 @@
 # STATE — HomeLab VM Manager
 
+## Session du 2026-07-01 (suite 3) — heartbeat online/offline temps réel
+
+Remontée terrain (test QEMU en cours avec Alex) : après un shutdown/reboot manuel
+d'une VM, le Dashboard restait figé sur l'ancien statut jusqu'à un clic manuel sur
+la fiche — le seul déclencheur d'online/offline était l'action utilisateur
+(`POST /api/vms/refresh`, `GET /{id}/refresh`) ou un effet de bord d'une action
+SSH (provisioning/sync/inspect), jamais un polling autonome.
+
+**Fix** : nouveau scheduler `schedule/liveness.py` (APScheduler, interval 5s,
+`max_instances=1` pour ne jamais superposer deux cycles), qui ping **toutes** les
+VMs en parallèle via `vms/status.check_liveness` (`ThreadPoolExecutor`, un ping
+concurrent par VM plutôt qu'en série — le temps de cycle ne dépend pas du nombre
+de VMs). Ne persiste sur disque et ne diffuse sur le bus d'événements **que si
+l'état online/offline vient de changer** (pas à chaque cycle) : évite l'écriture
+JSON et le bruit SSE toutes les 5s pour rien.
+
+L'événement `vm_status` publié sur `core/events.bus` transite par le flux SSE
+existant (`/api/history/stream`) déjà consommé par `LiveContext.jsx` — aucun
+changement frontend nécessaire : `version` est bumpé comme pour n'importe quel
+événement, `Dashboard.jsx` se recharge silencieusement (`reloadSilent`, simple
+GET, pas de ping) et affiche le nouveau statut. L'événement n'a pas le schéma
+`HistoryEvent` (`status`/`reason` absents) donc `isNotable` ne déclenche jamais
+de toast pour un ping — comportement voulu, un heartbeat n'est pas un événement
+« notable » au sens du journal.
+
+**Non validé sur le terrain** : la logique de transition est couverte par un
+test unitaire (ping mocké), mais le comportement réel (shutdown/reboot d'une
+vraie VM, délai perçu) reste à confirmer par Alex. Voir `TODO.md`.
+
 ## Session du 2026-07-01 (suite 2) — retour du support QEMU en parallèle du LXC
 
 Revirement sur la décision de scope du matin même : Chris redemande finalement
