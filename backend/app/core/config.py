@@ -10,8 +10,8 @@ HISTORY_FILE = DATA_DIR / "history.json"
 # Plafond du journal d'événements (scan / sync) — au-delà, on tronque le plus ancien.
 HISTORY_MAX_EVENTS = 1000
 
-# Interface réseau standard des VMs Proxmox.
-NET_INTERFACE = "ens18"
+# Interface réseau standard des conteneurs LXC Proxmox (name= dans net0).
+NET_INTERFACE = "eth0"
 # Parent Netdata central du homelab.
 NETDATA_PARENT = "192.168.1.103:19999"
 NETDATA_PORT = 19999
@@ -20,6 +20,11 @@ NETDATA_PORT = 19999
 DEFAULT_SETTINGS = {
     "ssh_user": "debian",
     "ssh_password": "",
+    # Hôte Proxmox (pas l'invité) : seul capable d'appliquer une IP statique
+    # persistante sur un conteneur LXC via `pct set net0` (voir proxmox_host.py).
+    "proxmox_host": "",
+    "proxmox_ssh_user": "root",
+    "proxmox_ssh_password": "",
     "netdata_parent_url": NETDATA_PARENT,
     "netdata_api_key": "",
     "daily_check_enabled": True,

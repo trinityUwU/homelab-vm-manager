@@ -68,7 +68,7 @@ export default function VMDetail() {
     setBusy(true); setMsg(null);
     try {
       await api.updateVm(id, {
-        name: vm.name, static_ip: vm.static_ip, ports: vm.ports,
+        name: vm.name, vmid: Number(vm.vmid), static_ip: vm.static_ip, ports: vm.ports,
         vm_type: vm.vm_type, ssh_user: vm.ssh_user, ssh_password: vm.ssh_password,
       });
       setMsg({ ok: true, text: "Modifications enregistrées" });
@@ -136,6 +136,7 @@ export default function VMDetail() {
         <div className="panel-head"><h2>Configuration</h2></div>
         <div className="grid-2">
           <div className="field"><label>Nom</label><input value={vm.name} onChange={(e) => set("name", e.target.value)} /></div>
+          <div className="field"><label>VMID (conteneur LXC Proxmox)</label><input className="mono-input" type="number" value={vm.vmid} onChange={(e) => set("vmid", e.target.value)} /></div>
           <div className="field"><label>IP statique</label><input className="mono-input" value={vm.static_ip} onChange={(e) => set("static_ip", e.target.value)} /></div>
           <div className="field"><label>Ports</label><input className="mono-input" value={vm.ports} onChange={(e) => set("ports", e.target.value)} /></div>
           <div className="field"><label>Utilisateur SSH</label><input className="mono-input" value={vm.ssh_user} onChange={(e) => set("ssh_user", e.target.value)} /></div>

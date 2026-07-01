@@ -1,5 +1,40 @@
 # STATE — HomeLab VM Manager
 
+## Session du 2026-07-01 — pivot LXC (le parc réel n'est pas du QEMU Debian pur)
+
+Test terrain en direct (Alex, Proxmox réel) : l'IP statique repartait en DHCP au
+reboot malgré le fix du 22/06. Root cause trouvée après investigation web —
+`pve-container` réinjecte la config réseau de l'invité **à chaque démarrage**
+d'après `net0` (le paramètre `ip=` stocké côté hôte Proxmox), peu importe le
+durcissement interne (cloud-init/NetworkManager/systemd-networkd). Aucun fix
+côté invité ne peut tenir face à ça.
+
+**Fix retenu** : faire porter l'IP statique par `net0` lui-même, via `pct set`
+côté hôte Proxmox (hotplug, pas de reboot conteneur) — nouveau module
+`vms/proxmox_host.py`. L'app a désormais besoin d'un accès SSH à l'**hôte**
+Proxmox (Paramètres → « Hôte Proxmox »), distinct des creds de chaque conteneur.
+
+**Décision de scope (validée avec Chris)** : le parc étant essentiellement des
+LXC, le support VM QEMU Debian pure est abandonné plutôt que maintenu en double
+chemin. `network.py` réduit aux utilitaires invité en lecture seule (détection
+d'interface pour `sysinfo`, attente reconnexion) ; toute la logique d'écriture
+réseau (ifupdown, cloud-init, harden_static_persistence) supprimée — obsolète
+et activement contre-productive sur un LXC.
+
+Chaque VM ajoutée doit désormais préciser son **VMID** Proxmox (`vmid: int`,
+champ requis dans `VMBase`) — décision d'implémentation : champ manuel à
+l'ajout plutôt qu'auto-découverte via `pct list` (matching par IP/hostname jugé
+trop fragile pour un ajout au coup par coup).
+
+Corrections annexes trouvées pendant le test : timeout de 60s trop court pour
+le kickstart Netdata réel (passé à 300s dans `install_netdata`), erreur
+tronquée à 300 caractères qui masquait la vraie cause (passée à 800 + log
+complet), et idempotence ajoutée (`systemctl is-active netdata` avant de
+relancer le kickstart — la VM de test était réutilisée entre essais).
+
+**Non validé sur le terrain** : le nouveau flux `pct set net0` doit encore être
+testé en conditions réelles par Alex (provisioning + reboot du conteneur).
+
 ## Session du 2026-06-22 — corrections terrain
 Deux bugs remontés du terrain, corrigés (non rejouables hors vraie VM, à valider) :
 - **IP static qui repassait en DHCP au reboot** → `network.harden_static_persistence()`
@@ -22,8 +57,8 @@ VM Debian neuve (non rejouable depuis cette machine).
 ## Ce qui est livré
 
 ### Gestion VM (socle)
-- Ajout VM + test SSH + provisioning séquentiel avec logs live (SSE).
-- Switch réseau /etc/network/interfaces (interface détectée), attente reconnexion.
+- Ajout VM (+ VMID Proxmox) + test SSH + provisioning séquentiel avec logs live (SSE).
+- Switch réseau via `pct set net0` côté hôte Proxmox (IP statique persistante sur LXC), attente reconnexion.
 - Types Standard (MAJ auto) / Essentielle (MAJ notifiées).
 - MOTD à balises dynamiques ; Vérifier & Synchroniser idempotent (IP/MOTD/Netdata).
 - Streaming Netdata enfant + purge du nœud parent à la suppression.
@@ -71,5 +106,6 @@ VM Debian neuve (non rejouable depuis cette machine).
   non rejouées faute de machines cibles.
 
 ## Hors scope (signalé, conforme au brief)
-- Multi-OS du provisioning réseau (codé pour Debian), auth de l'app, chiffrement
-  au-delà du module d'isolation, base de données, clés SSH, tests automatisés.
+- Support VM QEMU Debian pure (abandonné le 01/07 au profit du tout-LXC), auth
+  de l'app, chiffrement au-delà du module d'isolation, base de données, clés SSH,
+  tests automatisés.

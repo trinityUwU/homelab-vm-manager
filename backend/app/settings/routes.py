@@ -10,6 +10,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 class SettingsPatch(BaseModel):
     ssh_user: str | None = None
     ssh_password: str | None = None
+    proxmox_host: str | None = None
+    proxmox_ssh_user: str | None = None
+    proxmox_ssh_password: str | None = None
     netdata_parent_url: str | None = None
     netdata_api_key: str | None = None
     daily_check_enabled: bool | None = None

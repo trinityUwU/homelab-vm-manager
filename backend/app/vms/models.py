@@ -12,6 +12,7 @@ class VMType(str, Enum):
 
 class VMBase(BaseModel):
     name: str
+    vmid: int                  # ID du conteneur LXC côté Proxmox (pct config <vmid>).
     static_ip: str
     ports: str = ""            # Champ libre, ex "22;80;5000". Modifiable après coup.
     vm_type: VMType = VMType.STANDARD
@@ -26,6 +27,7 @@ class VMCreate(VMBase):
 
 class VMUpdate(BaseModel):
     name: str | None = None
+    vmid: int | None = None
     static_ip: str | None = None
     ports: str | None = None
     vm_type: VMType | None = None

@@ -33,6 +33,13 @@ le produit fait : gérer des VMs, leur réseau, leur monitoring, leur MOTD.
 - **maintenance** : action paquet à la demande avec sortie live (Job/SSE) — exécute, `updates` mesure.
 - **history.record / update_event** : un événement naît « en cours » puis évolue vers son état final ;
   chaque écriture est rediffusée sur le bus pour le temps réel.
+- **proxmox_host** (`vms/proxmox_host.py`) : seul module qui parle à l'**hôte** Proxmox
+  (SSH root, distinct des creds de chaque conteneur) pour lire/écrire `net0` via `pct`.
+  Source de vérité pour l'IP statique d'un LXC — l'invité ne peut pas la faire tenir seul,
+  Proxmox réinjecte sa config réseau à chaque démarrage du conteneur.
+- **network** (`vms/network.py`) : utilitaires **invité, lecture seule** (détection
+  d'interface pour `sysinfo`, attente de reconnexion) — ne touche plus à la config
+  réseau elle-même depuis le passage au tout-LXC.
 
 ## Règles de frontière entre modules
 

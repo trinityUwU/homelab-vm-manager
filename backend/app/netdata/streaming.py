@@ -5,6 +5,8 @@ La clé API est générée une fois manuellement sur le parent (192.168.1.103),
 saisie dans les Paramètres, puis réutilisée pour chaque VM. "Supprimer" un nœud
 = désactiver le streaming ici ; le parent garde l'historique (nœud éphémère).
 """
+from loguru import logger
+
 from ..core.config import NETDATA_PARENT
 from ..core.ssh_client import SSHError, SSHSession
 
@@ -24,13 +26,20 @@ def ensure_prerequisites(session: SSHSession) -> None:
 
 
 def install_netdata(session: SSHSession) -> None:
+    """Idempotent : si Netdata tourne déjà (VM réutilisée entre deux provisionings),
+    on ne relance pas le kickstart — sur une install existante il peut échouer
+    (repo/mise à jour en place) sans que ce soit un vrai problème pour nous."""
+    code, _out, _err = session.run("systemctl is-active --quiet netdata")
+    if code == 0:
+        return
     cmd = (
         f"wget -qO /tmp/kickstart.sh {KICKSTART} && "
         "sh /tmp/kickstart.sh --dont-wait --disable-telemetry --non-interactive"
     )
-    code, _out, err = session.run(cmd, sudo=True)
+    code, _out, err = session.run(cmd, sudo=True, timeout=300)
     if code != 0:
-        raise SSHError(f"installation Netdata échouée : {err[:300]}")
+        logger.error(f"kickstart Netdata échoué sur {session.host}: {err}")
+        raise SSHError(f"installation Netdata échouée : {err[:800]}")
 
 
 GUID_FILE = "/var/lib/netdata/registry/netdata.public.unique.id"

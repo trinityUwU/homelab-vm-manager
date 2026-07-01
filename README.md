@@ -1,9 +1,9 @@
 # HomeLab VM Manager
 
-Une web app pour gérer vos VMs Proxmox Debian de bout en bout : les créer, les
+Une web app pour gérer vos conteneurs LXC Proxmox de bout en bout : les créer, les
 passer en IP fixe, brancher le monitoring Netdata, suivre les mises à jour, poser
 un message d'accueil (MOTD) et les supprimer quand vous n'en voulez plus. Elle
-tourne sur une VM dédiée, qu'on appelle ici la « VM maître ».
+tourne sur une VM ou un conteneur dédié, qu'on appelle ici la « VM maître ».
 
 Le guide part de zéro. Pas besoin d'être développeur : suivez les étapes dans
 l'ordre et copiez-collez chaque commande dans un terminal sur la VM maître.
@@ -12,8 +12,15 @@ l'ordre et copiez-collez chaque commande dans un terminal sur la VM maître.
 
 ## À savoir avant de commencer
 
-- Vos VMs tournent sous Debian, avec l'interface réseau `ens18` (celle que Proxmox
-  configure par défaut). L'app ne gère que ce cas. Le reste se fait à la main.
+- Vos machines sont des **conteneurs LXC Proxmox** (interface `eth0`). L'app ne
+  gère que ce cas — le support VM QEMU pure a été retiré.
+- L'app a besoin d'un accès SSH à **l'hôte Proxmox lui-même** (pas seulement aux
+  conteneurs) : c'est lui qui pose l'IP statique via `pct set net0`, car un LXC
+  ne peut pas la faire tenir tout seul (Proxmox réinjecte sa config réseau à
+  chaque démarrage du conteneur). Ça se règle en Paramètres, section « Hôte
+  Proxmox ».
+- Chaque machine ajoutée dans l'app doit préciser son **VMID** Proxmox (visible
+  dans l'interface Proxmox ou via `pct list` sur l'hôte).
 - Le Netdata central, celui qui regroupe le monitoring de tout le lab, tourne sur
   la machine `192.168.1.103`, son tableau de bord est sur le port `19999`.
 - On se connecte aux VMs avec un identifiant et un mot de passe SSH, pas avec une
@@ -118,14 +125,16 @@ Pour arrêter, `./stop.sh`. Pour redémarrer, `./restart.sh`.
 
 Allez dans la page Paramètres et remplissez :
 
-1. L'identifiant et le mot de passe SSH par défaut de vos VMs. Le formulaire
+1. L'hôte Proxmox (IP) + un utilisateur/mot de passe SSH root dessus — c'est lui
+   qui applique l'IP statique des conteneurs, indispensable avant tout provisioning.
+2. L'identifiant et le mot de passe SSH par défaut de vos VMs. Le formulaire
    d'ajout se pré-remplira avec, ça évite de les retaper à chaque fois.
-2. La clé de streaming Netdata, celle générée à l'étape 2.
-3. L'heure de la vérification quotidienne (03h00 par défaut) et son activation.
-4. Le nom du lab et la ligne perso qui s'afficheront dans le MOTD.
+3. La clé de streaming Netdata, celle générée à l'étape 2.
+4. L'heure de la vérification quotidienne (03h00 par défaut) et son activation.
+5. Le nom du lab et la ligne perso qui s'afficheront dans le MOTD.
 
-Enregistrez. Vous pouvez maintenant ajouter une VM depuis « Ajouter une VM »,
-tester la connexion SSH, puis lancer le provisioning.
+Enregistrez. Vous pouvez maintenant ajouter une VM depuis « Ajouter une VM »
+(avec son VMID Proxmox), tester la connexion SSH, puis lancer le provisioning.
 
 ---
 

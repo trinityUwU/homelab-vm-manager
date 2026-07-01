@@ -39,6 +39,16 @@ export default function Settings() {
       </motion.div>
 
       <motion.div className="panel" variants={riseItem}>
+        <div className="panel-head"><h2>Hôte Proxmox</h2></div>
+        <p className="hint">Requis pour les LXC : seul l'hôte peut poser une IP statique persistante sur un conteneur (net0 via <code>pct set</code>), pas l'intérieur de l'invité.</p>
+        <div className="grid-2">
+          <div className="field"><label>Hôte / IP</label><input className="mono-input" value={s.proxmox_host} onChange={(e) => set("proxmox_host", e.target.value)} placeholder="192.168.1.10" /></div>
+          <div className="field"><label>Utilisateur SSH</label><input className="mono-input" value={s.proxmox_ssh_user} onChange={(e) => set("proxmox_ssh_user", e.target.value)} /></div>
+          <div className="field"><label>Mot de passe SSH</label><input type="password" value={s.proxmox_ssh_password} onChange={(e) => set("proxmox_ssh_password", e.target.value)} /></div>
+        </div>
+      </motion.div>
+
+      <motion.div className="panel" variants={riseItem}>
         <div className="panel-head"><h2>Netdata central</h2></div>
         <div className="grid-2">
           <div className="field"><label>URL du parent</label><input className="mono-input" value={s.netdata_parent_url} onChange={(e) => set("netdata_parent_url", e.target.value)} /></div>

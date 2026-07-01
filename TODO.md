@@ -13,37 +13,37 @@
 - [x] Upgrade non-interactif (force-conf), timeouts apt élargis
 - [x] Infos système (OS, noyau, archi, interface, IP) + logos OS réels
 - [x] Corrections : selects stylés, dernière activité relative, message timeout SSH
-- [x] Fix persistance IP static au reboot (durcissement cloud-init/NM/networkd/interfaces.d)
-- [x] Teardown complet à la suppression (désinstall Netdata + MOTD + retour DHCP)
+- [x] Teardown complet à la suppression (désinstall Netdata + MOTD)
+- [x] ~~Fix persistance IP static au reboot (durcissement cloud-init/NM/networkd)~~
+      — superseded : ne tenait pas sur un vrai LXC (Proxmox réinjecte sa config
+      réseau à chaque boot, peu importe le durcissement invité).
+- [x] **Pivot LXC** : IP statique portée par `net0` côté hôte Proxmox (`pct set`,
+      module `vms/proxmox_host.py`), support VM QEMU Debian pure abandonné.
+- [x] Netdata : timeout kickstart 60s -> 300s, erreur tronquée 300 -> 800 char + log,
+      idempotence (skip si déjà actif).
 
-## À valider sur le terrain — TESTS de la session 2026-06-22 (priorité)
+## À valider sur le terrain — flux net0 (priorité, session 2026-07-01)
 
-### Bug 1 — l'IP static tient après reboot
-1. Provisionner une VM Debian neuve via l'app (DHCP -> static).
-2. Confirmer que la VM répond sur l'IP static juste après provisioning.
-3. `reboot` la VM, attendre le redémarrage.
-4. **Vérif clé** : la VM répond toujours sur l'IP **static** (pas DHCP).
-5. Sur la VM : `ip -4 a` montre l'IP static ; `cat /etc/network/interfaces` = static.
-6. Si cloud-init présent : `cat /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`
-   existe et `/etc/netplan/50-cloud-init.yaml` n'a PAS été régénéré au boot.
-7. Cas iface ≠ ens18 (eth0) : confirmer que la détection et le durcissement ont visé la bonne.
+### Le fix pct set net0 tient après reboot
+1. Renseigner l'hôte Proxmox + creds SSH root dans Paramètres.
+2. Ajouter un LXC (VMID + IP DHCP + IP statique cible) et provisionner.
+3. Confirmer la reconnexion sur l'IP statique juste après le provisioning.
+4. `pct config <vmid>` sur l'hôte : `net0` contient bien `ip=<static>/24,gw=...`.
+5. Reboot le conteneur (`pct reboot <vmid>` ou depuis le conteneur).
+6. **Vérif clé** : le conteneur répond toujours sur l'IP statique, `ip a` dedans
+   ne montre plus qu'une seule IPv4 (plus de DHCP en parallèle).
 
-### Bug 2 — la machine est propre après suppression
-1. Supprimer une VM provisionnée et **en ligne** depuis l'app.
-2. Côté machine : `which netdata` absent, `ls /etc/netdata` absent,
-   `systemctl status netdata` introuvable.
-3. `cat /etc/motd` = vide.
-4. `cat /etc/network/interfaces` = `dhcp` ; après reboot la VM reprend une IP DHCP.
-5. Côté parent Netdata (192.168.1.103) : le nœud a disparu de l'interface.
-6. Cas VM **hors-ligne** à la suppression : la suppression aboutit quand même,
-   nœud retiré du parent via le GUID stocké (teardown distant sauté, normal).
+### Teardown restaure bien le DHCP net0
+1. Supprimer une VM provisionnée depuis l'app.
+2. `pct config <vmid>` sur l'hôte : `net0` repasse à `ip=dhcp`, plus de `gw=`.
+3. Reboot le conteneur : reprend bien une IP DHCP normale.
 
 ### Non-régression (déjà en attente)
-- [ ] Provisioning bout-en-bout sur une VM Debian neuve (SSH -> réseau -> Netdata -> MOTD)
 - [ ] Scan/upgrade réels sur un OS non-apt (Fedora/Arch/openSUSE/Alpine)
 - [ ] Comportement des commandes de comptage MAJ par gestionnaire (dnf/zypper/apk affinables)
 
 ## Backlog (hors scope actuel, à décider)
 - [ ] Chiffrement des mots de passe (module core/secrets prêt à l'accueillir)
 - [ ] Build de production du frontend servi par le backend (au lieu de vite dev)
-- [ ] Provisioning réseau multi-OS (actuellement Debian/ifupdown uniquement)
+- [ ] Auto-découverte du VMID (`pct list` + matching) si la saisie manuelle
+      devient pénible à l'usage

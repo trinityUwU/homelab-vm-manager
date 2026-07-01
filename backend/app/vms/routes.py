@@ -124,6 +124,6 @@ def _teardown_remote(vm) -> None:
         with SSHSession(vm.static_ip, vm.ssh_user, vm.ssh_password, timeout=8) as session:
             if not vm.netdata_guid:
                 vm.netdata_guid = read_machine_guid(session)
-            teardown_machine(session)
+            teardown_machine(session, vm.vmid)
     except Exception:  # noqa: BLE001 — best effort, la suppression doit aboutir.
         pass
